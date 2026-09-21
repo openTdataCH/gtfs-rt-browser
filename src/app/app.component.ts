@@ -29,7 +29,7 @@ export class AppComponent {
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
-  protected readonly feedUrl = signal<string>(GTFS_RT_FEED_URL]);
+  protected readonly feedUrl = signal<string>(GTFS_RT_FEED_URL);
   protected readonly parseState = signal<ParseState>(emptyParseState('idle'));
   protected readonly metadata = signal<FeedMetadataDto | undefined>(undefined);
   protected readonly items = signal<readonly TripUpdate[]>([]);
