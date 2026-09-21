@@ -1,0 +1,106 @@
+<div class="app-layout d-flex flex-column min-vh-100">
+  <header class="app-header d-flex align-items-center gap-3 px-4 py-3">
+    <h1 class="h5 mb-0">{{ title }}</h1>
+    <span class="badge text-bg-light">TripUpdates</span>
+    <span class="small text-white-50 me-auto">Mock protobuf · {{ metadata()?.version || 'GTFS-RT' }}</span>
+    @if (parseState().status === 'loading') {
+      <span class="small"><span class="spinner-border spinner-border-sm me-2"></span>{{ parseState().processed }} processed</span>
+    } @else if (parseState().status === 'complete') {
+      <span class="small">{{ parseState().count }} parsed in {{ parseState().elapsedMs / 1000 | number:'1.1-1' }}s</span>
+    }
+    <button type="button" class="btn btn-light btn-sm" [disabled]="parseState().status === 'loading'" (click)="parseFeed()">Reload</button>
+  </header>
+
+  <main class="app-content d-flex flex-column flex-grow-1 overflow-hidden">
+    <div class="toolbar d-flex flex-wrap align-items-center gap-2 border-bottom bg-white px-3 py-2">
+      <div class="btn-group btn-group-sm" role="group"><button class="btn btn-primary" type="button">
+        Trip updates <span class="badge text-bg-light ms-1">{{ items().length }}</span>
+      </button></div>
+      <button type="button" class="btn btn-outline-secondary btn-sm d-md-none ms-auto" (click)="toggleFilters()">
+        {{ filtersExpanded() ? 'Hide filters' : 'Filters' }}
+      </button>
+      <div class="filter-controls" [class.mobile-collapsed]="!filtersExpanded()">
+        <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
+        <select class="form-select form-select-sm route-select" [value]="routeFilter()" (change)="updateRoute($event)">
+          <option value="">All routes ({{ routeOptions().length }})</option>
+          @for (route of routeOptions(); track route.id) { <option [value]="route.id">{{ route.id }} ({{ route.count }})</option> }
+        </select>
+        <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
+          <option value="">All relationships</option>
+          @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count }})</option> }
+        </select>
+        <div class="form-check ms-1">
+          <input id="delayed-only" type="checkbox" class="form-check-input" [checked]="delayedOnly()" (change)="updateDelayedOnly($event)">
+          <label class="form-check-label small" for="delayed-only">Delayed only</label>
+        </div>
+      </div>
+      @if (parseState().status === 'error') { <span class="text-danger small">{{ parseState().message }}</span> }
+    </div>
+
+    @if (items().length === 0) {
+      <section class="empty-state d-flex flex-column flex-grow-1 align-items-center justify-content-center gap-3 p-4">
+        @if (parseState().status === 'loading') { <span class="spinner-border text-primary"></span><span class="text-secondary">Decoding GTFS-RT feed…</span> }
+        @else { <span class="text-secondary">No TripUpdate messages are available.</span> }
+      </section>
+    } @else {
+      <div class="workspace d-flex flex-grow-1 overflow-hidden">
+        <section class="list-pane d-flex flex-column border-end" aria-label="Trip updates">
+          <div class="small text-secondary border-bottom bg-white px-3 py-2">
+            {{ filteredItems().length }} of {{ items().length }} trip updates
+            @if (metadata(); as feed) { · {{ feed.entityCount }} total feed entities }
+          </div>
+          <cdk-virtual-scroll-viewport class="message-viewport flex-grow-1" [itemSize]="92" [minBufferPx]="552" [maxBufferPx]="1104">
+            <button *cdkVirtualFor="let item of filteredItems(); trackBy: trackById" type="button"
+              class="message-row w-100 border-0 border-bottom bg-white text-start px-3 py-2"
+              [class.selected]="selectedId() === item.id" (click)="select(item)">
+              <div class="d-flex align-items-center gap-2">
+                <span class="route-badge">{{ item.routeId }}</span>
+                <strong class="text-truncate">{{ item.tripId }}</strong>
+                <span class="badge ms-auto" [class]="delayClass(item.maxDelay)">{{ delayLabel(item.maxDelay) }}</span>
+              </div>
+              <div class="small text-secondary text-truncate mt-1">{{ item.vehicleLabel }} · {{ item.stops.length }} stops · {{ item.relationship }}</div>
+              <div class="entity-id text-secondary text-truncate">{{ item.id }}</div>
+            </button>
+          </cdk-virtual-scroll-viewport>
+        </section>
+
+        <aside class="detail-pane flex-grow-1 overflow-auto bg-white p-4" aria-label="Selected trip update">
+          @if (selected(); as item) {
+            <div class="d-flex align-items-start gap-3 mb-4">
+              <span class="route-badge route-badge-large">{{ item.routeId }}</span>
+              <div><h2 class="h4 mb-1">Trip {{ item.tripId }}</h2><div class="text-secondary">Entity {{ item.id }}</div></div>
+              <span class="badge ms-auto" [class]="delayClass(item.maxDelay)">{{ delayLabel(item.maxDelay) }}</span>
+            </div>
+            <dl class="detail-grid">
+              <dt>Service date</dt><dd>{{ item.dto.trip.startDate || '—' }} {{ item.dto.trip.startTime || '' }}</dd>
+              <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
+              <dt>Direction</dt><dd>{{ item.dto.trip.directionId ?? '—' }}</dd>
+              <dt>Vehicle</dt><dd>{{ item.vehicleLabel }}</dd>
+              <dt>Updated</dt><dd>{{ item.updatedAt ? (item.updatedAt | date:'medium') : '—' }}</dd>
+              <dt>Delay range</dt><dd>{{ delayLabel(item.minDelay) }} → {{ delayLabel(item.maxDelay) }}</dd>
+            </dl>
+
+            <section class="mt-4">
+              <div class="d-flex align-items-center mb-2"><h3 class="h6 mb-0">Stop time updates</h3><span class="badge text-bg-secondary ms-2">{{ item.stops.length }}</span></div>
+              <div class="table-responsive border rounded-2">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead><tr><th>#</th><th>Stop</th><th>Relationship</th><th>Arrival</th><th>Departure</th><th class="text-end">Delay</th></tr></thead>
+                  <tbody>
+                    @for (stop of item.stops; track stop.dto.stopSequence + ':' + stop.stopId) {
+                      <tr [class.table-warning]="stop.isSkipped">
+                        <td>{{ stop.dto.stopSequence ?? '—' }}</td><td class="font-monospace">{{ stop.stopId }}</td><td>{{ stop.relationship }}</td>
+                        <td>{{ stop.dto.arrival?.time ? ((stop.dto.arrival!.time! * 1000) | date:'HH:mm:ss') : '—' }}</td>
+                        <td>{{ stop.dto.departure?.time ? ((stop.dto.departure!.time! * 1000) | date:'HH:mm:ss') : '—' }}</td>
+                        <td class="text-end"><span class="badge" [class]="delayClass(stop.effectiveDelay)">{{ delayLabel(stop.effectiveDelay) }}</span></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          } @else { <div class="h-100 d-flex align-items-center justify-content-center text-secondary">Select a trip update.</div> }
+        </aside>
+      </div>
+    }
+  </main>
+</div>
