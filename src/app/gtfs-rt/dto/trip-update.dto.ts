@@ -1,3 +1,5 @@
+import type { AgencyJSON } from '../../gtfs-static/dto';
+
 export interface TripUpdateDto {
   readonly entityId: string;
   readonly trip: TripDescriptorDto;
@@ -5,6 +7,8 @@ export interface TripUpdateDto {
   readonly stopTimeUpdates: readonly StopTimeUpdateDto[];
   readonly timestamp?: number;
   readonly delay?: number;
+  readonly agencyId?: string;
+  readonly agency?: AgencyJSON;
 }
 
 export interface TripDescriptorDto {
