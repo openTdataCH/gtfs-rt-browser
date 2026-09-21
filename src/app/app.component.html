@@ -13,18 +13,37 @@
 
   <main class="app-content d-flex flex-column flex-grow-1 overflow-hidden">
     <div class="toolbar d-flex flex-wrap align-items-center gap-2 border-bottom bg-white px-3 py-2">
-      <div class="btn-group btn-group-sm" role="group"><button class="btn btn-primary" type="button">
-        Trip updates <span class="badge text-bg-light ms-1">{{ items().length }}</span>
-      </button></div>
+      <div class="btn-group btn-group-sm" role="group" aria-label="Trip update views">
+        <button type="button" class="btn"
+          [class.btn-primary]="activeView() === 'messages'"
+          [class.btn-outline-primary]="activeView() !== 'messages'"
+          (click)="selectView('messages')">
+          Trip updates <span class="badge text-bg-light ms-1">{{ messageItems().length }}</span>
+        </button>
+        <button type="button" class="btn"
+          [class.btn-danger]="activeView() === 'errors'"
+          [class.btn-outline-danger]="activeView() !== 'errors'"
+          (click)="selectView('errors')">
+          Errors <span class="badge text-bg-light ms-1">{{ errorItems().length }}</span>
+        </button>
+      </div>
       <button type="button" class="btn btn-outline-secondary btn-sm d-md-none ms-auto" (click)="toggleFilters()">
         {{ filtersExpanded() ? 'Hide filters' : 'Filters' }}
       </button>
       <div class="filter-controls" [class.mobile-collapsed]="!filtersExpanded()">
         <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
-        <select class="form-select form-select-sm route-select" [value]="routeFilter()" (change)="updateRoute($event)">
-          <option value="">All routes ({{ routeOptions().length }})</option>
-          @for (route of routeOptions(); track route.id) { <option [value]="route.id">{{ route.id }} ({{ route.count }})</option> }
-        </select>
+        @if (activeView() === 'messages') {
+          <select class="form-select form-select-sm agency-select" [value]="agencyFilter()" (change)="updateAgency($event)">
+            <option value="">All agencies ({{ agencyOptions().length }})</option>
+            @for (agency of agencyOptions(); track agency.id) {
+              <option [value]="agency.id">{{ agency.name }} ({{ agency.count }})</option>
+            }
+          </select>
+          <select class="form-select form-select-sm route-select" [value]="routeFilter()" (change)="updateRoute($event)">
+            <option value="">All routes ({{ routeOptions().length }})</option>
+            @for (route of routeOptions(); track route.id) { <option [value]="route.id">{{ route.id }} ({{ route.count }})</option> }
+          </select>
+        }
         <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
           <option value="">All relationships</option>
           @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count }})</option> }
@@ -46,7 +65,8 @@
       <div class="workspace d-flex flex-grow-1 overflow-hidden">
         <section class="list-pane d-flex flex-column border-end" aria-label="Trip updates">
           <div class="small text-secondary border-bottom bg-white px-3 py-2">
-            {{ filteredItems().length }} of {{ items().length }} trip updates
+            {{ filteredItems().length }} of {{ viewItems().length }}
+            {{ activeView() === 'messages' ? 'trip updates' : 'errors without routeId' }}
             @if (metadata(); as feed) { · {{ feed.entityCount }} total feed entities }
           </div>
           <cdk-virtual-scroll-viewport class="message-viewport flex-grow-1" [itemSize]="92" [minBufferPx]="552" [maxBufferPx]="1104">
@@ -58,7 +78,9 @@
                 <strong class="text-truncate">{{ item.tripId }}</strong>
                 <span class="badge ms-auto" [class]="delayClass(item.maxDelay)">{{ delayLabel(item.maxDelay) }}</span>
               </div>
-              <div class="small text-secondary text-truncate mt-1">{{ item.vehicleLabel }} · {{ item.stops.length }} stops · {{ item.relationship }}</div>
+              <div class="small text-secondary text-truncate mt-1">
+                {{ item.agencyName }} · {{ item.vehicleLabel }} · {{ item.stops.length }} stops · {{ item.relationship }}
+              </div>
               <div class="entity-id text-secondary text-truncate">{{ item.id }}</div>
             </button>
           </cdk-virtual-scroll-viewport>
@@ -74,6 +96,7 @@
             <dl class="detail-grid">
               <dt>Service date</dt><dd>{{ item.dto.trip.startDate || '—' }} {{ item.dto.trip.startTime || '' }}</dd>
               <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
+              <dt>Agency</dt><dd>{{ item.agencyName }} <span class="text-secondary">({{ item.agencyId }})</span></dd>
               <dt>Direction</dt><dd>{{ item.dto.trip.directionId ?? '—' }}</dd>
               <dt>Vehicle</dt><dd>{{ item.vehicleLabel }}</dd>
               <dt>Updated</dt><dd>{{ item.updatedAt ? (item.updatedAt | date:'medium') : '—' }}</dd>

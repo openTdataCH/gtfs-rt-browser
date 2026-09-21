@@ -6,6 +6,7 @@
 .filter-controls { display: contents; }
 .search-input { width: min(30rem, 42vw); }
 .route-select { width: 13rem; }
+.agency-select { width: 16rem; }
 .relationship-select { width: 13rem; }
 .workspace, .list-pane, .detail-pane, .message-viewport { min-height: 0; }
 .list-pane { flex: 0 0 42%; min-width: 24rem; background: #fff; }
@@ -31,7 +32,7 @@ th { white-space: nowrap; background: #f8f9fa; }
   .app-header .text-white-50 { display: none; }
   .filter-controls { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: .5rem; }
   .filter-controls.mobile-collapsed { display: none; }
-  .search-input, .route-select, .relationship-select { width: 100%; }
+  .search-input, .agency-select, .route-select, .relationship-select { width: 100%; }
   .workspace { flex-direction: column; overflow: auto !important; }
   .list-pane { flex: 0 0 48vh; min-width: 0; }
   .detail-pane { overflow: visible !important; }
