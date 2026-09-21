@@ -33,6 +33,9 @@ export class TripUpdate {
   public get id(): string { return this.dto.entityId; }
   public get tripId(): string { return this.dto.trip.tripId || '—'; }
   public get routeId(): string { return this.dto.trip.routeId || '—'; }
+  public get hasRouteId(): boolean { return Boolean(this.dto.trip.routeId); }
+  public get agencyId(): string { return this.dto.agencyId || 'No_Agency'; }
+  public get agencyName(): string { return this.dto.agency?.agency_name || this.agencyId; }
   public get vehicleLabel(): string { return this.dto.vehicle?.label || this.dto.vehicle?.id || '—'; }
   public get relationship(): string { return this.dto.trip.scheduleRelationship; }
   public get cancelled(): boolean { return this.relationship === 'CANCELED'; }
@@ -41,7 +44,7 @@ export class TripUpdate {
   public matches(query: string): boolean {
     const normalized = query.trim().toLocaleLowerCase();
     if (!normalized) return true;
-    return [this.id, this.tripId, this.routeId, this.vehicleLabel,
+    return [this.id, this.tripId, this.routeId, this.vehicleLabel, this.agencyId, this.agencyName,
       ...this.stops.map((stop) => stop.stopId)]
       .some((value) => value.toLocaleLowerCase().includes(normalized));
   }
