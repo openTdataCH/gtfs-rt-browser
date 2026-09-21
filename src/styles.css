@@ -1,0 +1,3 @@
+html, body { height: 100%; }
+body { margin: 0; background: #eef1f4; color: #212529; }
+button, input, select { font: inherit; }
