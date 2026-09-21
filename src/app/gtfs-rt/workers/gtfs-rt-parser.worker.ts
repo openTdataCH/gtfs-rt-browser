@@ -7,6 +7,10 @@ import {
 } from '../dto';
 
 interface ParseRequest { type: 'parse'; url: string; }
+interface DecodedFeed {
+  readonly feed: transit_realtime.FeedMessage;
+  readonly feedVersion: string;
+}
 const CHUNK_SIZE = 250;
 
 addEventListener('message', ({ data }: MessageEvent<ParseRequest>) => {
@@ -17,11 +21,12 @@ async function parseFeed(url: string): Promise<void> {
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Feed request failed: ${response.status} ${response.statusText}`);
-    const feed = await decodeFeed(response);
+    const { feed, feedVersion } = await decodeFeed(response);
     const tripEntities = feed.entity.filter((entity) => entity.tripUpdate && !entity.isDeleted);
 
     const metadata: FeedMetadataDto = {
-      version: feed.header.gtfsRealtimeVersion,
+      feedVersion,
+      gtfsRealtimeVersion: feed.header.gtfsRealtimeVersion,
       incrementality: ['FULL_DATASET', 'DIFFERENTIAL'][feed.header.incrementality] as FeedMetadataDto['incrementality'] ?? 'UNKNOWN',
       timestamp: present(feed.header, 'timestamp') ? toNumber(feed.header.timestamp) : undefined,
       entityCount: feed.entity.length,
@@ -40,14 +45,16 @@ async function parseFeed(url: string): Promise<void> {
   }
 }
 
-async function decodeFeed(response: Response): Promise<transit_realtime.FeedMessage> {
+async function decodeFeed(response: Response): Promise<DecodedFeed> {
   const bytes = new Uint8Array(await response.arrayBuffer());
   const contentType = response.headers.get('content-type')?.toLocaleLowerCase() ?? '';
   const isJsonMime = contentType.includes('application/json') || contentType.includes('+json');
   const isJsonBody = firstNonWhitespaceByte(bytes) === 0x7b || firstNonWhitespaceByte(bytes) === 0x5b;
 
   if (!isJsonMime && !isJsonBody) {
-    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes);
+    const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes);
+    const feedVersion = readFeedVersion(feed.header);
+    return { feed, feedVersion };
   }
 
   let json: unknown;
@@ -62,18 +69,37 @@ async function decodeFeed(response: Response): Promise<transit_realtime.FeedMess
     throw new Error('GTFS-RT JSON response must contain a FeedMessage object.');
   }
 
+  if (!isRecord(json['header'])) {
+    throw new Error('GTFS-RT response is missing header.feedVersion.');
+  }
+  const feedVersion = readFeedVersion(json['header']);
+
   const validationError = GtfsRealtimeBindings.transit_realtime.FeedMessage.verify(json);
   if (validationError) {
     // fromObject also accepts protobuf JSON enum names and 64-bit integer strings,
     // which verify() intentionally rejects because it expects wire-shaped values.
     try {
-      return GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json);
+      return {
+        feed: GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json),
+        feedVersion
+      };
     } catch {
       throw new Error(`Invalid GTFS-RT JSON FeedMessage: ${validationError}`);
     }
   }
 
-  return GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json);
+  return {
+    feed: GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json),
+    feedVersion
+  };
+}
+
+function readFeedVersion(header: object): string {
+  const feedVersion = (header as Record<string, unknown>)['feedVersion'];
+  if (typeof feedVersion !== 'string' || !feedVersion.trim()) {
+    throw new Error('GTFS-RT response is missing header.feedVersion.');
+  }
+  return feedVersion.trim();
 }
 
 function firstNonWhitespaceByte(bytes: Uint8Array): number | undefined {

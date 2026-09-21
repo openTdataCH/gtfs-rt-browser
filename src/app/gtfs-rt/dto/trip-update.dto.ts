@@ -45,7 +45,8 @@ export type StopScheduleRelationship =
   | 'SCHEDULED' | 'SKIPPED' | 'NO_DATA' | 'UNSCHEDULED' | 'UNKNOWN';
 
 export interface FeedMetadataDto {
-  readonly version: string;
+  readonly feedVersion: string;
+  readonly gtfsRealtimeVersion: string;
   readonly incrementality: 'FULL_DATASET' | 'DIFFERENTIAL' | 'UNKNOWN';
   readonly timestamp?: number;
   readonly entityCount: number;
