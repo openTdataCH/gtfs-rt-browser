@@ -5,6 +5,7 @@ import {
   FeedMetadataDto, StopScheduleRelationship, StopTimeEventDto,
   StopTimeUpdateDto, TripScheduleRelationship, TripUpdateDto
 } from '../dto';
+import { GtfsDbLookupJSON } from '../../gtfs-static/dto';
 
 interface ParseRequest { type: 'parse'; url: string; }
 interface DecodedFeed {
@@ -12,6 +13,7 @@ interface DecodedFeed {
   readonly feedVersion: string;
 }
 const CHUNK_SIZE = 250;
+const GTFS_LOOKUPS_URL = 'https://tools.opentransportdata.swiss/gtfs-query/db_lookups';
 
 addEventListener('message', ({ data }: MessageEvent<ParseRequest>) => {
   if (data.type === 'parse') void parseFeed(data.url);
@@ -22,6 +24,15 @@ async function parseFeed(url: string): Promise<void> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Feed request failed: ${response.status} ${response.statusText}`);
     const { feed, feedVersion } = await decodeFeed(response);
+    const gtfsDay = formatGtfsDay(feedVersion);
+    const lookups = await fetchGtfsLookups(gtfsDay);
+    console.info('GTFS static lookups parsed.', {
+      gtfsDay,
+      agencies: lookups.agency.rows.length,
+      routes: lookups.routes.rows.length,
+      stops: lookups.stops.rows.length
+    });
+
     const tripEntities = feed.entity.filter((entity) => entity.tripUpdate && !entity.isDeleted);
 
     const metadata: FeedMetadataDto = {
@@ -43,6 +54,53 @@ async function parseFeed(url: string): Promise<void> {
   } catch (error: unknown) {
     postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown GTFS-RT parsing error.' });
   }
+}
+
+function formatGtfsDay(feedVersion: string): string {
+  const match = /^(\d{4})(\d{2})(\d{2})$/.exec(feedVersion);
+  if (!match) {
+    throw new Error(`Invalid header.feedVersion "${feedVersion}": expected YYYYMMDD.`);
+  }
+
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year)
+    || date.getUTCMonth() !== Number(month) - 1
+    || date.getUTCDate() !== Number(day)) {
+    throw new Error(`Invalid header.feedVersion "${feedVersion}": expected a valid YYYYMMDD date.`);
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+async function fetchGtfsLookups(gtfsDay: string): Promise<GtfsDbLookupJSON> {
+  const url = new URL(GTFS_LOOKUPS_URL);
+  url.searchParams.set('gtfs_day', gtfsDay);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`GTFS lookup request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const json: unknown = await response.json();
+  if (!isGtfsDbLookupJSON(json)) {
+    throw new Error('GTFS lookup response does not match the expected agency/routes/stops structure.');
+  }
+  return json;
+}
+
+function isGtfsDbLookupJSON(value: unknown): value is GtfsDbLookupJSON {
+  if (!isRecord(value)) return false;
+  return isLookup(value['agency'], 'agency')
+    && isLookup(value['routes'], 'routes')
+    && isLookup(value['stops'], 'stops');
+}
+
+function isLookup(value: unknown, name: string): boolean {
+  return isRecord(value)
+    && value['lookup_name'] === name
+    && typeof value['data_source'] === 'string'
+    && Array.isArray(value['rows'])
+    && typeof value['rows_no'] === 'number';
 }
 
 async function decodeFeed(response: Response): Promise<DecodedFeed> {
