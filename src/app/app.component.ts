@@ -26,12 +26,21 @@ interface ParseState {
 export class AppComponent {
   private readonly stream = inject(GtfsRtStreamService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly browserNow = signal(Date.now());
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
   protected readonly feedUrl = signal<string>(GTFS_RT_FEED_URL);
   protected readonly parseState = signal<ParseState>(emptyParseState('idle'));
   protected readonly metadata = signal<FeedMetadataDto | undefined>(undefined);
+  protected readonly feedNow = computed(() => {
+    const timestamp = this.metadata()?.timestamp;
+    return timestamp === undefined ? undefined : new Date(timestamp * 1000);
+  });
+  protected readonly feedTimeOffsetMinutes = computed(() => {
+    const now = this.feedNow();
+    return now === undefined ? undefined : Math.round((now.getTime() - this.browserNow()) / 60_000);
+  });
   protected readonly items = signal<readonly TripUpdate[]>([]);
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal('');
@@ -89,7 +98,11 @@ export class AppComponent {
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });
 
-  public constructor() { this.parseFeed(); }
+  public constructor() {
+    const clock = window.setInterval(() => this.browserNow.set(Date.now()), 30_000);
+    this.destroyRef.onDestroy(() => window.clearInterval(clock));
+    this.parseFeed();
+  }
 
   protected parseFeed(): void {
     this.items.set([]); this.selectedId.set(undefined); this.metadata.set(undefined);
@@ -135,6 +148,10 @@ export class AppComponent {
   protected delayClass(seconds?: number): string {
     if (seconds === undefined || seconds === 0) return 'text-bg-secondary';
     return seconds > 0 ? 'text-bg-danger' : 'text-bg-success';
+  }
+
+  protected signedMinutes(minutes: number): string {
+    return `${minutes > 0 ? '+' : ''}${minutes}min`;
   }
 }
 

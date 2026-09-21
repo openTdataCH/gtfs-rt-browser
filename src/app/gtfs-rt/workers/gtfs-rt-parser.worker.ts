@@ -36,6 +36,7 @@ async function parseFeed(url: string): Promise<void> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Feed request failed: ${response.status} ${response.statusText}`);
     const { feed, feedVersion: headerFeedVersion } = await decodeFeed(response);
+    const feedTimestamp = readRequiredFeedTimestamp(feed.header);
     const catalogItem = resolveCatalogItem(catalog, headerFeedVersion);
     const feedVersion = catalogItem.gtfs_day;
     const gtfsDay = feedVersion;
@@ -57,7 +58,7 @@ async function parseFeed(url: string): Promise<void> {
       feedVersion,
       gtfsRealtimeVersion: feed.header.gtfsRealtimeVersion,
       incrementality: ['FULL_DATASET', 'DIFFERENTIAL'][feed.header.incrementality] as FeedMetadataDto['incrementality'] ?? 'UNKNOWN',
-      timestamp: present(feed.header, 'timestamp') ? toNumber(feed.header.timestamp) : undefined,
+      timestamp: feedTimestamp,
       entityCount: feed.entity.length,
       tripUpdateCount: tripEntities.length
     };
@@ -73,6 +74,17 @@ async function parseFeed(url: string): Promise<void> {
   } catch (error: unknown) {
     postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown GTFS-RT parsing error.' });
   }
+}
+
+function readRequiredFeedTimestamp(header: transit_realtime.FeedHeader): number {
+  if (!present(header, 'timestamp')) {
+    throw new Error('GTFS-RT header is missing the required timestamp used as application time.');
+  }
+  const timestamp = toNumber(header.timestamp);
+  if (!Number.isFinite(timestamp) || timestamp < 0) {
+    throw new Error(`GTFS-RT header timestamp "${timestamp}" is invalid.`);
+  }
+  return timestamp;
 }
 
 async function fetchGtfsCatalog(): Promise<GtfsStaticDbCatalogJSON> {

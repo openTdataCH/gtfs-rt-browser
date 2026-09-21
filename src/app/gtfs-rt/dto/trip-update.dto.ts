@@ -52,7 +52,7 @@ export interface FeedMetadataDto {
   readonly feedVersion: string;
   readonly gtfsRealtimeVersion: string;
   readonly incrementality: 'FULL_DATASET' | 'DIFFERENTIAL' | 'UNKNOWN';
-  readonly timestamp?: number;
+  readonly timestamp: number;
   readonly entityCount: number;
   readonly tripUpdateCount: number;
 }
