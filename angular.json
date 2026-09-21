@@ -29,11 +29,6 @@
               {
                 "glob": "**/*",
                 "input": "public"
-              },
-              {
-                "glob": "gtfs-rt-latest.pb",
-                "input": "data/mocks/gtfs-rt-fetch--data",
-                "output": "data"
               }
             ],
             "styles": [
@@ -94,11 +89,6 @@
               {
                 "glob": "**/*",
                 "input": "public"
-              },
-              {
-                "glob": "gtfs-rt-latest.pb",
-                "input": "data/mocks/gtfs-rt-fetch--data",
-                "output": "data"
               }
             ],
             "styles": [
