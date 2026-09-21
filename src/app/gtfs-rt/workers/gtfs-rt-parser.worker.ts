@@ -17,8 +17,7 @@ async function parseFeed(url: string): Promise<void> {
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Feed request failed: ${response.status} ${response.statusText}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes);
+    const feed = await decodeFeed(response);
     const tripEntities = feed.entity.filter((entity) => entity.tripUpdate && !entity.isDeleted);
 
     const metadata: FeedMetadataDto = {
@@ -39,6 +38,53 @@ async function parseFeed(url: string): Promise<void> {
   } catch (error: unknown) {
     postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown GTFS-RT parsing error.' });
   }
+}
+
+async function decodeFeed(response: Response): Promise<transit_realtime.FeedMessage> {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const contentType = response.headers.get('content-type')?.toLocaleLowerCase() ?? '';
+  const isJsonMime = contentType.includes('application/json') || contentType.includes('+json');
+  const isJsonBody = firstNonWhitespaceByte(bytes) === 0x7b || firstNonWhitespaceByte(bytes) === 0x5b;
+
+  if (!isJsonMime && !isJsonBody) {
+    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes);
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(new TextDecoder().decode(bytes));
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : 'invalid JSON';
+    throw new Error(`GTFS-RT response is JSON but could not be parsed: ${reason}`);
+  }
+
+  if (!isRecord(json)) {
+    throw new Error('GTFS-RT JSON response must contain a FeedMessage object.');
+  }
+
+  const validationError = GtfsRealtimeBindings.transit_realtime.FeedMessage.verify(json);
+  if (validationError) {
+    // fromObject also accepts protobuf JSON enum names and 64-bit integer strings,
+    // which verify() intentionally rejects because it expects wire-shaped values.
+    try {
+      return GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json);
+    } catch {
+      throw new Error(`Invalid GTFS-RT JSON FeedMessage: ${validationError}`);
+    }
+  }
+
+  return GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json);
+}
+
+function firstNonWhitespaceByte(bytes: Uint8Array): number | undefined {
+  for (const byte of bytes) {
+    if (byte !== 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) return byte;
+  }
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function toTripUpdateDto(entity: transit_realtime.FeedEntity): TripUpdateDto {
