@@ -42,7 +42,3 @@ Thumbs.db
 .vscode
 
 /public/build-info.js
-
-# local STUFF BELOW
-public/mocks/*.xml
-
