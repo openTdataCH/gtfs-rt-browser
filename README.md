@@ -11,10 +11,6 @@ npm install
 npm start
 ```
 
-Open <http://localhost:4206>. The mock feed is read from
-`data/mocks/gtfs-rt-fetch--data/gtfs-rt-latest.pb` and copied to the build as
-`data/gtfs-rt-latest.pb`.
-
 ## Architecture
 
 - `dto/` contains structured-clone-safe feed data.
