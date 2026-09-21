@@ -6,6 +6,8 @@ import { FeedMetadataDto } from './gtfs-rt/dto';
 import { TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 
+const GTFS_RT_FEED_URL = 'https://api.opentransportdata.swiss/la/gtfs-rt';
+
 interface ParseState {
   readonly status: 'idle' | 'loading' | 'complete' | 'error';
   readonly processed: number;
@@ -27,7 +29,7 @@ export class AppComponent {
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
-  protected readonly feedUrl = signal('data/gtfs-rt-latest.pb');
+  protected readonly feedUrl = signal<string>(GTFS_RT_FEED_URL]);
   protected readonly parseState = signal<ParseState>(emptyParseState('idle'));
   protected readonly metadata = signal<FeedMetadataDto | undefined>(undefined);
   protected readonly items = signal<readonly TripUpdate[]>([]);
