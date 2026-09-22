@@ -21,6 +21,7 @@ export interface TripTimelineDto {
 }
 
 export interface BusinessOrganisationDto {
+  readonly sboid: string;
   readonly organisationNumber: string;
   readonly descriptionDe: string;
   readonly abbreviationDe: string;

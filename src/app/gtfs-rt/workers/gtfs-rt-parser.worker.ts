@@ -137,10 +137,12 @@ async function fetchBusinessOrganisations(): Promise<ReadonlyMap<string, Busines
   const rows = parseDelimited(csv.replace(/^\uFEFF/, ''), ';');
   const header = rows.shift();
   if (!header) throw new Error('Business-organisation CSV is empty.');
+  const sboidIndex = header.indexOf('sboid');
   const organisationNumberIndex = header.indexOf('organisationNumber');
   const descriptionDeIndex = header.indexOf('descriptionDe');
   const abbreviationDeIndex = header.indexOf('abbreviationDe');
-  if ([organisationNumberIndex, descriptionDeIndex, abbreviationDeIndex].some((index) => index < 0)) {
+  if ([sboidIndex, organisationNumberIndex, descriptionDeIndex, abbreviationDeIndex]
+    .some((index) => index < 0)) {
     throw new Error('Business-organisation CSV is missing required columns.');
   }
 
@@ -149,6 +151,7 @@ async function fetchBusinessOrganisations(): Promise<ReadonlyMap<string, Busines
     const organisationNumber = row[organisationNumberIndex]?.trim();
     if (!organisationNumber) continue;
     organisations.set(organisationNumber, {
+      sboid: row[sboidIndex]?.trim() ?? '',
       organisationNumber,
       descriptionDe: row[descriptionDeIndex]?.trim() ?? '',
       abbreviationDe: row[abbreviationDeIndex]?.trim() ?? ''
