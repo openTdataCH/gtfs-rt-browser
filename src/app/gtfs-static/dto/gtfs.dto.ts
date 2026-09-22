@@ -86,15 +86,17 @@ export interface GtfsDbLookupRoutes {
   rows_no: number;
 }
 
+export interface GtfsDbLookupStops {
+  lookup_name: 'stops';
+  data_source: string;
+  rows: StopJSON[];
+  rows_no: number;
+}
+
 export interface GtfsDbLookupJSON {
   agency: GtfsDbLookupAgency;
   routes: GtfsDbLookupRoutes;
-  stops: {
-    lookup_name: 'stops';
-    data_source: string;
-    rows: StopJSON[];
-    rows_no: number;
-  };
+  stops: GtfsDbLookupStops;
 }
 
 export interface GtfsDbFtsRoutesLookupJSON {
