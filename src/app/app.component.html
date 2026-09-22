@@ -2,13 +2,19 @@
   <header class="app-header d-flex align-items-center gap-3 px-4 py-3">
     <h1 class="h5 mb-0">{{ title }}</h1>
     <span class="badge text-bg-light">TripUpdates</span>
-    <span class="small text-white-50 me-auto">
-      Feed · {{ metadata()?.feedVersion || 'GTFS-RT' }}
+    <div class="header-metadata d-flex align-items-center gap-2 me-auto">
+      <span class="metadata-pill">
+        <span class="metadata-label">GTFS feed</span>
+        <strong>{{ metadata()?.feedVersion || '—' }}</strong>
+      </span>
       @if (feedNow(); as now) {
-        · Now: {{ now | date:'yyyy-MM-dd HH:mm:ss' }}
-        @if (feedTimeOffsetMinutes(); as offset) { ({{ signedMinutes(offset) }}) }
+        <span class="metadata-pill metadata-pill-now">
+          <span class="metadata-label">GTFS-RT time</span>
+          <strong>{{ now | date:'yyyy-MM-dd HH:mm:ss' }}</strong>
+          @if (feedTimeOffsetMinutes(); as offset) { <span class="metadata-offset">({{ signedMinutes(offset) }})</span> }
+        </span>
       }
-    </span>
+    </div>
     @if (parseState().status === 'loading') {
       <span class="small"><span class="spinner-border spinner-border-sm me-2"></span>{{ parseState().processed }} processed</span>
     } @else if (parseState().status === 'complete') {
