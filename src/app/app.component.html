@@ -167,7 +167,7 @@
               <dt>Static timeline</dt>
               <dd>
                 {{ dayMinuteLabel(item.departureDayMinutes) }} → {{ dayMinuteLabel(item.arrivalDayMinutes) }}
-                @if (item.durationMinutes !== undefined) { · {{ item.durationMinutes }} min }
+                @if (item.durationMinutes !== undefined) { · {{ item.durationMinutes | number:'1.0-0' }} min }
               </dd>
             </dl>
 

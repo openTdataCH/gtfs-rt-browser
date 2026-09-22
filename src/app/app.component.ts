@@ -211,8 +211,9 @@ export class AppComponent {
 
   protected dayMinuteLabel(minutes?: number): string {
     if (minutes === undefined) return '—';
-    const dayOffset = Math.floor(minutes / 1_440);
-    const minuteOfDay = ((minutes % 1_440) + 1_440) % 1_440;
+    const wholeMinutes = Math.floor(minutes);
+    const dayOffset = Math.floor(wholeMinutes / 1_440);
+    const minuteOfDay = ((wholeMinutes % 1_440) + 1_440) % 1_440;
     const hours = Math.floor(minuteOfDay / 60).toString().padStart(2, '0');
     const mins = (minuteOfDay % 60).toString().padStart(2, '0');
     return `${hours}:${mins}${dayOffset ? ` (+${dayOffset}d)` : ''}`;
