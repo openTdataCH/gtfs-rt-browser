@@ -1,12 +1,14 @@
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { APP_URLS } from './config';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 import { extendedRouteTypeLabel } from './gtfs-static/route-types';
+import { StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
+import { GtfsStaticService } from './gtfs-static/gtfs-static.service';
 
 const TIMELINE_CELL_MINUTES = 15;
 const TIMELINE_CELL_WIDTH = 100;
@@ -28,6 +30,13 @@ interface TimelineRow {
   readonly width: number;
 }
 
+interface StaticTripState {
+  readonly key?: string;
+  readonly status: 'idle' | 'loading' | 'loaded' | 'error';
+  readonly detail?: TripDetailResponseJSON;
+  readonly message?: string;
+}
+
 @Component({
   selector: 'app-root',
   imports: [ScrollingModule, DatePipe, DecimalPipe],
@@ -37,6 +46,7 @@ interface TimelineRow {
 })
 export class AppComponent {
   private readonly stream = inject(GtfsRtStreamService);
+  private readonly gtfsStatic = inject(GtfsStaticService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
@@ -67,6 +77,9 @@ export class AppComponent {
       + Number(parts['minute']) + Number(parts['second']) / 60;
   });
   protected readonly items = signal<readonly TripUpdate[]>([]);
+  protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
+  protected readonly stopsLookupError = signal<string | undefined>(undefined);
+  protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal('');
   protected readonly agencyFilter = signal('');
@@ -167,6 +180,25 @@ export class AppComponent {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });
+  protected readonly staticStopTimes = computed(() => {
+    const item = this.selected();
+    const trip = this.staticTripState().detail?.result.trip;
+    const metadata = this.metadata();
+    if (!item || !trip || !metadata) return [];
+    return parseStaticStopTimes(trip.stop_times_s).map((stop, index) => {
+      const realtime = item.stops.find((candidate) => candidate.stopId === stop.stopId) ?? item.stops[index];
+      const arrivalDelay = eventDelay(
+        realtime?.dto.arrival, stop.arrival, item.dto.trip.startDate, metadata.feedDay);
+      const departureDelay = eventDelay(
+        realtime?.dto.departure, stop.departure, item.dto.trip.startDate, metadata.feedDay);
+      return {
+        ...stop,
+        sequence: index + 1,
+        name: this.stopsById().get(stop.stopId)?.stop_name,
+        delay: departureDelay ?? arrivalDelay
+      };
+    });
+  });
 
   protected readonly timeline = computed(() => {
     const items = this.filteredItems().filter((item) => item.dto.timeline !== undefined);
@@ -214,11 +246,22 @@ export class AppComponent {
   public constructor() {
     const clock = window.setInterval(() => this.browserNow.set(Date.now()), 30_000);
     this.destroyRef.onDestroy(() => window.clearInterval(clock));
+    effect(() => {
+      const item = this.selected();
+      const gtfsDay = this.metadata()?.feedVersion;
+      if (!item || !gtfsDay || !item.dto.staticTripAvailable || item.tripId === '—') {
+        this.staticTripState.set({ status: 'idle' });
+        return;
+      }
+      void this.loadSelectedStaticTrip(gtfsDay, item.tripId);
+    });
     this.parseFeed();
   }
 
   protected parseFeed(): void {
     this.items.set([]); this.selectedId.set(undefined); this.metadata.set(undefined);
+    this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
+    this.staticTripState.set({ status: 'idle' });
     this.startedAt = performance.now();
     this.parseState.set(emptyParseState('loading'));
     this.stream.streamTripUpdates(this.feedUrl()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -235,6 +278,10 @@ export class AppComponent {
         if (event.type === 'complete') {
           this.parseState.set({ ...emptyParseState('complete'), count: event.count, elapsedMs: performance.now() - this.startedAt });
         }
+        if (event.type === 'stops-lookup') {
+          this.stopsById.set(event.stopsById);
+        }
+        if (event.type === 'stops-error') this.stopsLookupError.set(event.message);
       },
       error: (error: Error) => this.parseState.set({ ...emptyParseState('error'), message: error.message })
     });
@@ -369,6 +416,78 @@ export class AppComponent {
     return now !== undefined && departure !== undefined && arrival !== undefined
       && departure <= now && now <= arrival;
   }
+
+  private async loadSelectedStaticTrip(gtfsDay: string, tripId: string): Promise<void> {
+    const key = `${gtfsDay}|${tripId}`;
+    if (this.staticTripState().key === key) return;
+    this.staticTripState.set({ key, status: 'loading' });
+    try {
+      const detail = await this.gtfsStatic.loadTrip(gtfsDay, tripId);
+      if (this.staticTripState().key === key) {
+        this.staticTripState.set({ key, status: 'loaded', detail });
+      }
+    } catch (error: unknown) {
+      if (this.staticTripState().key === key) {
+        this.staticTripState.set({
+          key,
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Unknown GTFS trip error.'
+        });
+      }
+    }
+  }
+}
+
+interface ParsedStaticStopTime {
+  readonly stopId: string;
+  readonly arrival?: string;
+  readonly departure?: string;
+}
+
+function parseStaticStopTimes(value: string): ParsedStaticStopTime[] {
+  if (!value.trim()) return [];
+  return value.split(' -- ').map((entry) => {
+    const [stopId = '', arrival = '', departure = ''] = entry.split('|');
+    return {
+      stopId,
+      arrival: arrival || undefined,
+      departure: departure || undefined
+    };
+  });
+}
+
+function eventDelay(
+  event: { readonly delay?: number; readonly time?: number } | undefined,
+  scheduledTime: string | undefined,
+  startDate: string | undefined,
+  feedDay: string
+): number | undefined {
+  if (event?.delay !== undefined) return event.delay;
+  if (event?.time === undefined || !scheduledTime) return undefined;
+  const actual = swissDayMinute(event.time, feedDay);
+  const scheduled = scheduledDayMinute(scheduledTime, startDate, feedDay);
+  return actual === undefined || scheduled === undefined ? undefined : Math.round((actual - scheduled) * 60);
+}
+
+function swissDayMinute(timestamp: number, feedDay: string): number | undefined {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(timestamp * 1000)).map((part) => [part.type, part.value]));
+  const date = `${parts['year']}-${parts['month']}-${parts['day']}`;
+  const dayOffset = (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${feedDay}T00:00:00Z`)) / 86_400_000;
+  return dayOffset * 1_440 + Number(parts['hour']) * 60
+    + Number(parts['minute']) + Number(parts['second']) / 60;
+}
+
+function scheduledDayMinute(time: string, startDate: string | undefined, feedDay: string): number | undefined {
+  const match = /^(\d+):(\d{2})(?::(\d{2}))?$/.exec(time);
+  if (!match) return undefined;
+  const serviceDay = startDate && /^\d{8}$/.test(startDate)
+    ? `${startDate.slice(0, 4)}-${startDate.slice(4, 6)}-${startDate.slice(6, 8)}`
+    : feedDay;
+  const dayOffset = (Date.parse(`${serviceDay}T00:00:00Z`) - Date.parse(`${feedDay}T00:00:00Z`)) / 86_400_000;
+  return dayOffset * 1_440 + Number(match[1]) * 60 + Number(match[2]) + Number(match[3] ?? 0) / 60;
 }
 
 function emptyParseState(status: ParseState['status']): ParseState {
