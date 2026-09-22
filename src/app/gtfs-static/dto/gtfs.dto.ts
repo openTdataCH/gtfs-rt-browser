@@ -13,6 +13,7 @@ export interface GtfsStaticTripCondensed {
   stop_times_count: number;
   stop_times_s: string;
   original_trip_id: string;
+  hints?: string;
 }
 
 export interface AgencyJSON {
