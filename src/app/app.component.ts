@@ -177,6 +177,7 @@ export class AppComponent {
   protected updateSearch(event: Event): void { this.searchTerm.set((event.target as HTMLInputElement).value); }
   protected updateAgency(event: Event): void {
     this.agencyFilter.set((event.target as HTMLSelectElement).value);
+    this.selectedId.set(this.timeline().rows[0]?.item.id);
   }
   protected updateRelationship(event: Event): void { this.relationshipFilter.set((event.target as HTMLSelectElement).value); }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
