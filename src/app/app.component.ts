@@ -191,6 +191,10 @@ export class AppComponent {
     return item.agencyName;
   }
 
+  protected gtfsRouteUrl(item: TripUpdate): string {
+    return `${APP_URLS.gtfsChRoutes}?route=${encodeURIComponent(item.routeId)}`;
+  }
+
   protected delayClass(seconds?: number): string {
     if (seconds === undefined || seconds === 0) return 'text-bg-secondary';
     return seconds > 0 ? 'text-bg-danger' : 'text-bg-success';
