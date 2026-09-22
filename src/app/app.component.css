@@ -58,6 +58,7 @@
 }
 .timeline-block span { display: block; overflow: hidden; padding: 0 .5rem; line-height: 2.35rem; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-block-cancelled { border-color: #a52834; background: #dc3545; }
+.timeline-block-added { border-color: #a66308; background: #b86e09; }
 .list-pane { flex: 0 0 42%; min-width: 24rem; background: #fff; }
 .detail-pane {
   flex: 0 0 min(64rem, 40vw) !important;
@@ -74,6 +75,9 @@
   font-size: .76rem; font-weight: 700;
 }
 .route-badge-large { min-width: 3.25rem; min-height: 2.25rem; font-size: .95rem; }
+.route-badge-scheduled { background: #357abd; }
+.route-badge-cancelled { background: #dc3545; }
+.route-badge-added { background: #b86e09; }
 .detail-grid { display: grid; grid-template-columns: 10rem minmax(0, 1fr); gap: .55rem 1rem; }
 .detail-grid dt, .detail-grid dd { margin: 0; }
 .detail-grid dt { color: #6c757d; font-weight: 500; }

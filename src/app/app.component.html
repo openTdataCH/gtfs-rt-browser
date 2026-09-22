@@ -147,6 +147,7 @@
                   <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
                     <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
                       [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
+                      [class.timeline-block-added]="row.item.relationship === 'ADDED'"
                       [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
                       <span>{{ row.item.tripId }}</span>
                     </button>
@@ -183,12 +184,13 @@
         <aside class="detail-pane flex-grow-1 overflow-auto bg-white p-4" aria-label="Selected trip update">
           @if (selected(); as item) {
             <div class="d-flex align-items-start gap-3 mb-4">
-              <span class="route-badge route-badge-large">{{ item.routeId }}</span>
-              <div><h2 class="h4 mb-1">Trip {{ item.tripId }}</h2><div class="text-secondary">Entity {{ item.id }}</div></div>
-              <span class="badge ms-auto" [class]="delayClass(item.maxDelay)">{{ delayLabel(item.maxDelay) }}</span>
+              <span class="route-badge route-badge-large"
+                [class.route-badge-scheduled]="item.relationship === 'SCHEDULED'"
+                [class.route-badge-cancelled]="item.relationship === 'CANCELED'"
+                [class.route-badge-added]="item.relationship === 'ADDED'">{{ item.relationship }}</span>
+              <div><h2 class="h4 mb-1">Trip {{ item.tripId }}</h2></div>
             </div>
             <dl class="detail-grid">
-              <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
               <dt>Agency</dt>
               <dd>
                 {{ agencyDetailLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span>
