@@ -88,7 +88,13 @@
 }
 .detail-summary { flex: 0 0 auto; }
 .stop-times-section { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
-.stop-times-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.stop-times-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 1rem;
+  scrollbar-gutter: stable;
+}
 .message-row { height: 92px; color: inherit; }
 .message-row:hover { background: #f4f8fc !important; }
 .message-row.selected { background: #e9f2ff !important; box-shadow: inset 4px 0 #0d6efd; }
