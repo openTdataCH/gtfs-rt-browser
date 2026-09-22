@@ -212,11 +212,6 @@
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
               <dt>Delay range</dt><dd>{{ delayLabel(item.minDelay) }} → {{ delayLabel(item.maxDelay) }}</dd>
-              <dt>Static timeline</dt>
-              <dd>
-                {{ dayMinuteLabel(item.departureDayMinutes) }} → {{ dayMinuteLabel(item.arrivalDayMinutes) }}
-                @if (item.durationMinutes !== undefined) { · {{ item.durationMinutes | number:'1.0-0' }} min }
-              </dd>
             </dl>
 
             <section class="mt-4">
