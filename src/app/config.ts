@@ -1,6 +1,7 @@
 export const APP_URLS = {
   gtfsRtFeed:
     'https://tools.opentransportdata.swiss/data/gtfs-rt/gtfs-rt-latest.pb',
+  gtfsRtSnapshot: 'https://tools.opentransportdata.swiss/gtfs-rt-snapshot',
   gtfsCatalog: 'https://tools.opentransportdata.swiss/gtfs-static-dbs/gtfs-static-dbs.json',
   gtfsAgencyLookup: 'https://tools.opentransportdata.swiss/gtfs-query/lookup/agency',
   gtfsRoutesLookup: 'https://tools.opentransportdata.swiss/gtfs-query/lookup/routes',

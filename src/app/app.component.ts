@@ -24,6 +24,11 @@ interface ParseState {
   readonly message: string;
 }
 
+interface FeedSource {
+  readonly url: string;
+  readonly error?: string;
+}
+
 interface TimelineRow {
   readonly item: TripUpdate;
   readonly index: number;
@@ -63,12 +68,11 @@ export class AppComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
+  private readonly feedSource = feedSourceFromQuery(window.location.search);
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
-  protected readonly feedUrl = signal<string>(
-    new URLSearchParams(window.location.search).get('gtfs-rt-url')?.trim() || APP_URLS.gtfsRtFeed
-  );
+  protected readonly feedUrl = signal<string>(this.feedSource.url);
   protected readonly parseState = signal<ParseState>(emptyParseState('idle'));
   protected readonly metadata = signal<FeedMetadataDto | undefined>(undefined);
   protected readonly feedNow = computed(() => {
@@ -329,6 +333,10 @@ export class AppComponent {
     this.items.set([]); this.selectedId.set(undefined); this.metadata.set(undefined);
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
+    if (this.feedSource.error) {
+      this.parseState.set({ ...emptyParseState('error'), message: this.feedSource.error });
+      return;
+    }
     this.startedAt = performance.now();
     this.parseState.set(emptyParseState('loading'));
     this.stream.streamTripUpdates(this.feedUrl()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -672,4 +680,25 @@ function scheduledDayMinute(time: string, startDate: string | undefined, feedDay
 
 function emptyParseState(status: ParseState['status']): ParseState {
   return { status, processed: 0, count: 0, elapsedMs: 0, message: '' };
+}
+
+function feedSourceFromQuery(search: string): FeedSource {
+  const params = new URLSearchParams(search);
+  const explicitUrl = params.get('gtfs-rt-url')?.trim();
+  if (explicitUrl) return { url: explicitUrl };
+
+  const snapshot = params.get('gtfs-rt-snapshot')?.trim();
+  if (!snapshot) return { url: APP_URLS.gtfsRtFeed };
+  const match = /^(\d{4})-(\d{2})-(\d{2})-([01]\d|2[0-3])([0-5]\d)$/.exec(snapshot);
+  const date = match && new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  if (!match || !date || Number.isNaN(date.getTime())
+    || date.toISOString().slice(0, 10) !== `${match[1]}-${match[2]}-${match[3]}`) {
+    return {
+      url: APP_URLS.gtfsRtFeed,
+      error: 'Invalid gtfs-rt-snapshot. Expected a valid YYYY-MM-DD-HHmm value.'
+    };
+  }
+  return {
+    url: `${APP_URLS.gtfsRtSnapshot}/${match[1]}/${match[2]}/${match[3]}/GTFS_RT-${snapshot}.json`
+  };
 }
