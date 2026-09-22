@@ -82,6 +82,10 @@
         <section class="timeline-pane d-flex flex-column flex-grow-1 overflow-hidden" aria-label="Trip timeline">
           <div class="timeline-summary small text-secondary border-bottom bg-white px-3 py-2">
             <span>{{ timeline().rows.length }} trips · {{ dayMinuteLabel(timeline().start) }} → {{ dayMinuteLabel(timeline().end) }} · 15-minute grid</span>
+            <strong class="timeline-count">
+              {{ timeline().rows.length }}@if (timeline().rows.length !== timelineItems().length) {<span class="timeline-count-total"> / {{ timelineItems().length }}</span>}
+              <span>trips</span>
+            </strong>
             <span class="ms-auto d-flex align-items-center gap-2">
               <span class="form-check mb-0">
                 <input id="group-route-short-name" type="checkbox" class="form-check-input"
