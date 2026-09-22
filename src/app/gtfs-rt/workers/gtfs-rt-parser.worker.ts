@@ -50,6 +50,18 @@ async function parseFeed(url: string): Promise<void> {
     const feedVersion = catalogItem.gtfs_day;
     const gtfsDay = feedVersion;
     const feedDay = formatSwissDay(feedTimestamp);
+    const tripEntities = feed.entity.filter((entity) => entity.tripUpdate && !entity.isDeleted);
+    const metadata: FeedMetadataDto = {
+      feedVersion,
+      feedDay,
+      gtfsRealtimeVersion: feed.header.gtfsRealtimeVersion,
+      incrementality: ['FULL_DATASET', 'DIFFERENTIAL'][feed.header.incrementality] as FeedMetadataDto['incrementality'] ?? 'UNKNOWN',
+      timestamp: feedTimestamp,
+      entityCount: feed.entity.length,
+      tripUpdateCount: tripEntities.length
+    };
+    postMessage({ type: 'metadata', metadata });
+
     const [agencyLookup, routesLookup] = await Promise.all([
       fetchGtfsLookup(GTFS_AGENCY_LOOKUP_URL, gtfsDay, 'agency'),
       fetchGtfsLookup(GTFS_ROUTES_LOOKUP_URL, gtfsDay, 'routes')
@@ -69,19 +81,7 @@ async function parseFeed(url: string): Promise<void> {
       feedDay
     };
 
-    const tripEntities = feed.entity.filter((entity) => entity.tripUpdate && !entity.isDeleted);
     assertAgencySourcesPresent(tripEntities, lookupIndex);
-
-    const metadata: FeedMetadataDto = {
-      feedVersion,
-      feedDay,
-      gtfsRealtimeVersion: feed.header.gtfsRealtimeVersion,
-      incrementality: ['FULL_DATASET', 'DIFFERENTIAL'][feed.header.incrementality] as FeedMetadataDto['incrementality'] ?? 'UNKNOWN',
-      timestamp: feedTimestamp,
-      entityCount: feed.entity.length,
-      tripUpdateCount: tripEntities.length
-    };
-    postMessage({ type: 'metadata', metadata });
 
     for (let index = 0; index < tripEntities.length; index += CHUNK_SIZE) {
       const updates = tripEntities.slice(index, index + CHUNK_SIZE)

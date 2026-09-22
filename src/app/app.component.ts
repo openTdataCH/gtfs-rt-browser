@@ -1,6 +1,6 @@
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { TripUpdate } from './gtfs-rt/models';
@@ -10,6 +10,9 @@ const GTFS_RT_FEED_URL =
   'https://tools.opentransportdata.swiss/data/gtfs-rt/gtfs-rt-latest.pb';
 const TIMELINE_CELL_MINUTES = 15;
 const TIMELINE_CELL_WIDTH = 72;
+const TIMELINE_LEAD_MINUTES = 60;
+const TIMELINE_START_MINUTES = 3 * 60;
+const TIMELINE_END_MINUTES = 27 * 60;
 
 interface ParseState {
   readonly status: 'idle' | 'loading' | 'complete' | 'error';
@@ -30,6 +33,7 @@ export class AppComponent {
   private readonly stream = inject(GtfsRtStreamService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly browserNow = signal(Date.now());
+  private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
@@ -97,11 +101,8 @@ export class AppComponent {
 
   protected readonly timeline = computed(() => {
     const items = this.filteredItems().filter((item) => item.dto.timeline !== undefined);
-    if (items.length === 0) return { start: 0, end: 0, width: 0, cells: [], rows: [] };
-    const first = Math.min(...items.map((item) => item.departureDayMinutes!));
-    const last = Math.max(...items.map((item) => item.arrivalDayMinutes!));
-    const start = Math.floor(Math.max(0, first) / TIMELINE_CELL_MINUTES) * TIMELINE_CELL_MINUTES;
-    const end = Math.ceil(Math.min(2_880, last) / TIMELINE_CELL_MINUTES) * TIMELINE_CELL_MINUTES;
+    const start = TIMELINE_START_MINUTES;
+    const end = TIMELINE_END_MINUTES;
     const width = Math.max(0, (end - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH);
     const cells = Array.from({ length: Math.max(0, (end - start) / TIMELINE_CELL_MINUTES) }, (_, index) => {
       const minute = start + index * TIMELINE_CELL_MINUTES;
@@ -149,7 +150,10 @@ export class AppComponent {
     this.parseState.set(emptyParseState('loading'));
     this.stream.streamTripUpdates(this.feedUrl()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (event) => {
-        if (event.type === 'metadata') this.metadata.set(event.metadata);
+        if (event.type === 'metadata') {
+          this.metadata.set(event.metadata);
+          this.positionTimelineAtFeedTime();
+        }
         if (event.type === 'trip-updates') {
           this.items.update((items) => [...items, ...event.updates]);
           this.selectedId.update((id) => id ?? event.updates[0]?.id);
@@ -168,6 +172,7 @@ export class AppComponent {
     this.activeView.set(view);
     this.agencyFilter.set('');
     this.selectedId.set(undefined);
+    if (view === 'timeline') this.positionTimelineAtFeedTime();
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
   protected updateSearch(event: Event): void { this.searchTerm.set((event.target as HTMLInputElement).value); }
@@ -203,6 +208,16 @@ export class AppComponent {
     const hours = Math.floor(minuteOfDay / 60).toString().padStart(2, '0');
     const mins = (minuteOfDay % 60).toString().padStart(2, '0');
     return `${hours}:${mins}${dayOffset ? ` (+${dayOffset}d)` : ''}`;
+  }
+
+  private positionTimelineAtFeedTime(): void {
+    window.requestAnimationFrame(() => {
+      const element = this.timelineScroll()?.nativeElement;
+      const nowLeft = this.timelineNowLeft();
+      if (!element || nowLeft === undefined) return;
+      const leadWidth = TIMELINE_LEAD_MINUTES / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH;
+      element.scrollLeft = Math.max(0, Math.min(nowLeft - leadWidth, element.scrollWidth - element.clientWidth));
+    });
   }
 }
 

@@ -60,7 +60,7 @@
       @if (parseState().status === 'error') { <span class="text-danger small">{{ parseState().message }}</span> }
     </div>
 
-    @if (items().length === 0) {
+    @if (!metadata()) {
       <section class="empty-state d-flex flex-column flex-grow-1 align-items-center justify-content-center gap-3 p-4">
         @if (parseState().status === 'loading') { <span class="spinner-border text-primary"></span><span class="text-secondary">Decoding GTFS-RT feed…</span> }
         @else { <span class="text-secondary">No TripUpdate messages are available.</span> }
@@ -72,7 +72,7 @@
           <div class="small text-secondary border-bottom bg-white px-3 py-2">
             {{ timeline().rows.length }} trips · {{ dayMinuteLabel(timeline().start) }} → {{ dayMinuteLabel(timeline().end) }} · 15-minute grid
           </div>
-          <div class="timeline-scroll flex-grow-1 overflow-auto">
+          <div #timelineScroll class="timeline-scroll flex-grow-1 overflow-auto">
             <div class="timeline-table" [style.--timeline-width.px]="timeline().width">
               <div class="timeline-corner border-end border-bottom bg-white">Trip / agency</div>
               <div class="timeline-axis border-bottom bg-white" [style.width.px]="timeline().width">

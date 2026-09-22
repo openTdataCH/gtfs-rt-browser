@@ -1,6 +1,14 @@
 :host { display: block; min-height: 100vh; }
 .app-layout { height: 100vh; }
 .app-header { color: #fff; background: #343a40; }
+.metadata-pill {
+  display: inline-flex; align-items: center; gap: .45rem; padding: .35rem .6rem;
+  border: 1px solid rgba(255, 255, 255, .3); border-radius: .4rem;
+  color: #fff; background: rgba(255, 255, 255, .1); font-size: .78rem; white-space: nowrap;
+}
+.metadata-pill-now { border-color: rgba(255, 107, 107, .65); background: rgba(220, 53, 69, .2); }
+.metadata-label { color: rgba(255, 255, 255, .68); font-size: .68rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.metadata-offset { color: rgba(255, 255, 255, .72); }
 .app-content, .empty-state { min-height: 0; background: #eef1f4; }
 .toolbar { flex: 0 0 auto; }
 .filter-controls { display: contents; }
@@ -62,7 +70,7 @@ th { white-space: nowrap; background: #f8f9fa; }
 
 @media (max-width: 767.98px) {
   .app-header { padding-inline: 1rem !important; }
-  .app-header .text-white-50 { display: none; }
+  .header-metadata { display: none !important; }
   .filter-controls { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: .5rem; }
   .filter-controls.mobile-collapsed { display: none; }
   .search-input, .agency-select, .relationship-select { width: 100%; }
