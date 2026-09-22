@@ -1,4 +1,4 @@
-import type { AgencyJSON } from '../../gtfs-static/dto';
+import type { AgencyJSON, RouteJSON } from '../../gtfs-static/dto';
 
 export interface TripUpdateDto {
   readonly entityId: string;
@@ -9,6 +9,7 @@ export interface TripUpdateDto {
   readonly delay?: number;
   readonly agencyId?: string;
   readonly agency?: AgencyJSON;
+  readonly route?: RouteJSON;
   readonly businessOrganisation?: BusinessOrganisationDto;
   readonly timeline?: TripTimelineDto;
   readonly timelineError?: string;

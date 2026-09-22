@@ -492,6 +492,7 @@ function toTripUpdateDto(entity: transit_realtime.FeedEntity, lookups: LookupInd
     delay: present(update, 'delay') ? update.delay : undefined,
     agencyId: route?.agency_id,
     agency,
+    route,
     businessOrganisation,
     timeline: timelineResult.timeline,
     timelineError: timelineResult.error

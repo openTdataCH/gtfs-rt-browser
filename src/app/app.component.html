@@ -140,6 +140,10 @@
               <dt>Service date</dt><dd>{{ item.dto.trip.startDate || '—' }} {{ item.dto.trip.startTime || '' }}</dd>
               <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
               <dt>Agency</dt><dd>{{ agencyLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span></dd>
+              <dt>Route ID</dt><dd>{{ item.routeId }}</dd>
+              @if (item.dto.route; as route) {
+                <dt>Route short name</dt><dd>{{ route.route_short_name || '—' }}</dd>
+              }
               <dt>Direction</dt><dd>{{ item.dto.trip.directionId ?? '—' }}</dd>
               <dt>Vehicle</dt><dd>{{ item.vehicleLabel }}</dd>
               <dt>Updated</dt><dd>{{ item.updatedAt ? (item.updatedAt | date:'medium') : '—' }}</dd>
