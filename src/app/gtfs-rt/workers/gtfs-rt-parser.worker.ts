@@ -357,6 +357,55 @@ function toTripUpdateDto(entity: transit_realtime.FeedEntity, lookups: LookupInd
   };
 }
 
+function staticTimelineResult(
+  tripId: string | undefined,
+  timeline: GtfsDayTripTimelineRow | undefined,
+  stops: readonly transit_realtime.TripUpdate.IStopTimeUpdate[],
+  feedDay: string
+): { timeline?: TripUpdateDto['timeline']; error?: string } {
+  if (timeline) {
+    return { timeline: {
+      departureDayMinutes: timeline.departure_day_minutes,
+      arrivalDayMinutes: timeline.arrival_day_minutes
+    } };
+  }
+
+  const realtime = realtimeTimelineResult(stops, feedDay);
+  if (realtime.timeline) return realtime;
+  return {
+    error: `${tripId ? `No static timeline found for trip_id ${tripId}. ` : 'TripUpdate has no trip_id. '}${realtime.error}`
+  };
+}
+
+function realtimeTimelineResult(
+  stops: readonly transit_realtime.TripUpdate.IStopTimeUpdate[],
+  feedDay: string
+): { timeline?: TripUpdateDto['timeline']; error?: string } {
+  if (stops.length === 0) return { error: 'TripUpdate has no realtime stop_time_update entries.' };
+  const first = stops[0];
+  const last = stops[stops.length - 1];
+  if (!first.departure || !present(first.departure, 'time')) {
+    return { error: 'First realtime stop_time_update has no departure time.' };
+  }
+  if (!last.arrival || !present(last.arrival, 'time')) {
+    return { error: 'Last realtime stop_time_update has no arrival time.' };
+  }
+  return { timeline: {
+    departureDayMinutes: swissDayMinutes(toNumber(first.departure.time!), feedDay),
+    arrivalDayMinutes: swissDayMinutes(toNumber(last.arrival.time!), feedDay)
+  } };
+}
+
+function swissDayMinutes(timestamp: number, feedDay: string): number {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(timestamp * 1000)).map((part) => [part.type, part.value]));
+  const date = `${parts['year']}-${parts['month']}-${parts['day']}`;
+  const dayOffset = (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${feedDay}T00:00:00Z`)) / 86_400_000;
+  return dayOffset * 1_440 + Number(parts['hour']) * 60 + Number(parts['minute']) + Number(parts['second']) / 60;
+}
+
 function toStopTimeUpdateDto(stop: transit_realtime.TripUpdate.StopTimeUpdate): StopTimeUpdateDto {
   return {
     stopSequence: present(stop, 'stopSequence') ? stop.stopSequence : undefined,
