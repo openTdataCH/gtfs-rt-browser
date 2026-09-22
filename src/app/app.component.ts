@@ -66,7 +66,9 @@ export class AppComponent {
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
-  protected readonly feedUrl = signal<string>(APP_URLS.gtfsRtFeed);
+  protected readonly feedUrl = signal<string>(
+    new URLSearchParams(window.location.search).get('gtfs-rt-url')?.trim() || APP_URLS.gtfsRtFeed
+  );
   protected readonly parseState = signal<ParseState>(emptyParseState('idle'));
   protected readonly metadata = signal<FeedMetadataDto | undefined>(undefined);
   protected readonly feedNow = computed(() => {
