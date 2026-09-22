@@ -30,6 +30,7 @@ export interface BusinessOrganisationDto {
 
 export interface TripDescriptorDto {
   readonly tripId?: string;
+  readonly originalTripId?: string;
   readonly routeId?: string;
   readonly directionId?: number;
   readonly startTime?: string;
