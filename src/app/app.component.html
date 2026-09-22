@@ -188,7 +188,6 @@
               <span class="badge ms-auto" [class]="delayClass(item.maxDelay)">{{ delayLabel(item.maxDelay) }}</span>
             </div>
             <dl class="detail-grid">
-              <dt>Service date</dt><dd>{{ item.dto.trip.startDate || '—' }} {{ item.dto.trip.startTime || '' }}</dd>
               <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
               <dt>Agency</dt>
               <dd>
@@ -212,9 +211,6 @@
                 <dt>Route short name</dt><dd>{{ route.route_short_name || '—' }}</dd>
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
-              <dt>Direction</dt><dd>{{ item.dto.trip.directionId ?? '—' }}</dd>
-              <dt>Vehicle</dt><dd>{{ item.vehicleLabel }}</dd>
-              <dt>Updated</dt><dd>{{ item.updatedAt ? (item.updatedAt | date:'medium') : '—' }}</dd>
               <dt>Delay range</dt><dd>{{ delayLabel(item.minDelay) }} → {{ delayLabel(item.maxDelay) }}</dd>
               <dt>Static timeline</dt>
               <dd>
