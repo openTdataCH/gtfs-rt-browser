@@ -94,12 +94,12 @@
               <div class="timeline-corner border-end border-bottom bg-white">Trip / agency</div>
               <div class="timeline-axis border-bottom bg-white" [style.width.px]="timeline().width">
                 @for (cell of timeline().cells; track cell.minute) {
-                  <div class="timeline-cell" [style.left.px]="cell.left">{{ cell.label }}</div>
+                  <div class="timeline-cell" [class.timeline-cell-major]="cell.major" [style.left.px]="cell.left">{{ cell.label }}</div>
                 }
               </div>
               <div class="timeline-grid-lines" [style.width.px]="timeline().width">
                 @for (cell of timeline().cells; track cell.minute) {
-                  <div class="timeline-grid-line" [style.left.px]="cell.left"></div>
+                  <div class="timeline-grid-line" [class.timeline-grid-line-major]="cell.major" [style.left.px]="cell.left"></div>
                 }
                 @if (timelineNowLeft(); as nowLeft) {
                   <div class="timeline-now" [style.left.px]="nowLeft" title="GTFS-RT feed timestamp"></div>

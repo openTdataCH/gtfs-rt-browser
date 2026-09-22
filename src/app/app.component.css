@@ -27,11 +27,13 @@
 .timeline-corner { left: 0; z-index: 6; padding: 1rem; color: #495057; font-size: .8rem; font-weight: 600; }
 .timeline-axis { position: sticky; }
 .timeline-cell {
-  position: absolute; top: 0; width: 72px; height: 100%; padding: .35rem .2rem;
-  border-left: 1px solid #d9dee3; color: #6c757d; font-size: .68rem; white-space: nowrap;
+  position: absolute; top: 0; width: 24px; height: 100%; padding: .35rem .2rem;
+  border-left: 1px solid #e9ecef; color: #6c757d; font-size: .68rem; white-space: nowrap;
 }
+.timeline-cell-major { border-left-color: #d9dee3; }
 .timeline-grid-lines { position: absolute; top: 3.5rem; bottom: 0; left: 20rem; z-index: 0; pointer-events: none; }
 .timeline-grid-line { position: absolute; top: 0; bottom: 0; border-left: 1px solid #e3e6e9; }
+.timeline-grid-line-major { border-left-color: #cfd4da; }
 .timeline-now { position: absolute; top: 0; bottom: 0; z-index: 5; width: 2px; background: #dc3545; }
 .timeline-label, .timeline-track { height: 4rem; }
 .timeline-group-label, .timeline-group-track { height: 2.75rem; background: #eef1f4; }

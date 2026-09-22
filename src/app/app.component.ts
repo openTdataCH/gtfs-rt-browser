@@ -9,7 +9,7 @@ import { GtfsRtStreamService } from './gtfs-rt/services';
 import { extendedRouteTypeLabel } from './gtfs-static/route-types';
 
 const TIMELINE_CELL_MINUTES = 15;
-const TIMELINE_CELL_WIDTH = 72;
+const TIMELINE_CELL_WIDTH = 100;
 const TIMELINE_LEAD_MINUTES = 60;
 const TIMELINE_START_MINUTES = 3 * 60;
 const TIMELINE_END_MINUTES = 27 * 60;
@@ -169,7 +169,8 @@ export class AppComponent {
     const width = Math.max(0, (end - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH);
     const cells = Array.from({ length: Math.max(0, (end - start) / TIMELINE_CELL_MINUTES) }, (_, index) => {
       const minute = start + index * TIMELINE_CELL_MINUTES;
-      return { minute, left: index * TIMELINE_CELL_WIDTH, label: this.dayMinuteLabel(minute) };
+      const major = minute % 15 === 0;
+      return { minute, left: index * TIMELINE_CELL_WIDTH, label: major ? this.dayMinuteLabel(minute) : '', major };
     });
     const rows = items
       .filter((item) => item.arrivalDayMinutes! > start && item.departureDayMinutes! < end)
