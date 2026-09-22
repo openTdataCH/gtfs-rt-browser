@@ -424,6 +424,19 @@ export class AppComponent {
     return `${hours}:${mins}${dayOffset ? ` (+${dayOffset}d)` : ''}`;
   }
 
+  protected timelineDateTimeLabel(minutes: number): string {
+    const feedDay = this.metadata()?.feedDay;
+    if (!feedDay) return this.dayMinuteLabel(minutes);
+    const wholeMinutes = Math.floor(minutes);
+    const dayOffset = Math.floor(wholeMinutes / 1_440);
+    const minuteOfDay = ((wholeMinutes % 1_440) + 1_440) % 1_440;
+    const date = new Date(`${feedDay}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + dayOffset);
+    const hours = Math.floor(minuteOfDay / 60).toString().padStart(2, '0');
+    const mins = (minuteOfDay % 60).toString().padStart(2, '0');
+    return `${date.toISOString().slice(0, 10)} ${hours}:${mins}`;
+  }
+
   private positionTimelineAtFeedTime(): void {
     window.requestAnimationFrame(() => {
       const element = this.timelineScroll()?.nativeElement;
