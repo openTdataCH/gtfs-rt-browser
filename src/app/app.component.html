@@ -45,10 +45,6 @@
               <option [value]="agency.id">{{ agency.name }} ({{ agency.count }})</option>
             }
           </select>
-          <select class="form-select form-select-sm route-select" [value]="routeFilter()" (change)="updateRoute($event)">
-            <option value="">All routes ({{ routeOptions().length }})</option>
-            @for (route of routeOptions(); track route.id) { <option [value]="route.id">{{ route.id }} ({{ route.count }})</option> }
-          </select>
         }
         <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
           <option value="">All relationships</option>

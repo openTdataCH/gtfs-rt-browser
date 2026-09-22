@@ -47,7 +47,6 @@ export class AppComponent {
   protected readonly items = signal<readonly TripUpdate[]>([]);
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal('');
-  protected readonly routeFilter = signal('');
   protected readonly agencyFilter = signal('');
   protected readonly relationshipFilter = signal('');
   protected readonly delayedOnly = signal(false);
@@ -60,13 +59,6 @@ export class AppComponent {
     item.dto.timeline === undefined || item.dto.timelineError !== undefined));
   protected readonly viewItems = computed(() =>
     this.activeView() === 'timeline' ? this.timelineItems() : this.errorItems());
-
-  protected readonly routeOptions = computed(() => {
-    const counts = new Map<string, number>();
-    for (const item of this.timelineItems()) counts.set(item.routeId, (counts.get(item.routeId) ?? 0) + 1);
-    return [...counts].map(([id, count]) => ({ id, count }))
-      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-  });
 
   protected readonly agencyOptions = computed(() => {
     const options = new Map<string, { id: string; name: string; count: number }>();
@@ -92,11 +84,9 @@ export class AppComponent {
   });
 
   protected readonly filteredItems = computed(() => {
-    const route = this.routeFilter();
     const agency = this.agencyFilter();
     const relationship = this.relationshipFilter();
     return this.viewItems().filter((item) => item.matches(this.searchTerm())
-      && (!route || item.routeId === route)
       && (!agency || item.agencyId === agency)
       && (!relationship || item.relationship === relationship)
       && (!this.delayedOnly() || (item.maxDelay ?? 0) > 0));
@@ -178,13 +168,11 @@ export class AppComponent {
   protected select(item: TripUpdate): void { this.selectedId.set(item.id); }
   protected selectView(view: 'timeline' | 'errors'): void {
     this.activeView.set(view);
-    this.routeFilter.set('');
     this.agencyFilter.set('');
     this.selectedId.set(undefined);
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
   protected updateSearch(event: Event): void { this.searchTerm.set((event.target as HTMLInputElement).value); }
-  protected updateRoute(event: Event): void { this.routeFilter.set((event.target as HTMLSelectElement).value); }
   protected updateAgency(event: Event): void {
     this.agencyFilter.set((event.target as HTMLSelectElement).value);
   }
