@@ -82,12 +82,18 @@
         <section class="timeline-pane d-flex flex-column flex-grow-1 overflow-hidden" aria-label="Trip timeline">
           <div class="timeline-summary small text-secondary border-bottom bg-white px-3 py-2">
             <span>{{ timeline().rows.length }} trips · {{ dayMinuteLabel(timeline().start) }} → {{ dayMinuteLabel(timeline().end) }} · 15-minute grid</span>
-            @if (agencyFilter() && timelineGroups().length) {
-              <span class="ms-auto d-flex gap-1">
+            <span class="ms-auto d-flex align-items-center gap-2">
+              <span class="form-check mb-0">
+                <input id="group-route-short-name" type="checkbox" class="form-check-input"
+                  [checked]="groupByRouteShortName()" [disabled]="!canGroupByRouteShortName()"
+                  (change)="updateGroupByRouteShortName($event)">
+                <label class="form-check-label" for="group-route-short-name">Group by route short name</label>
+              </span>
+              @if (groupByRouteShortName() && canGroupByRouteShortName() && timelineGroups().length) {
                 <button type="button" class="btn btn-outline-secondary btn-sm py-0" (click)="expandAllRouteShortNames()">Expand all</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm py-0" (click)="collapseAllRouteShortNames()">Collapse all</button>
-              </span>
-            }
+              }
+            </span>
           </div>
           <div #timelineScroll class="timeline-scroll flex-grow-1 overflow-auto">
             <div class="timeline-table" [style.--timeline-width.px]="timeline().width">
@@ -105,7 +111,7 @@
                   <div class="timeline-now" [style.left.px]="nowLeft" title="GTFS-RT feed timestamp"></div>
                 }
               </div>
-              @if (agencyFilter()) {
+              @if (groupByRouteShortName() && canGroupByRouteShortName()) {
                 @for (group of timelineGroups(); track group.name) {
                   <button type="button" class="timeline-group-label border-0 border-end border-bottom text-start"
                     (click)="toggleRouteShortName(group.name)">

@@ -73,6 +73,7 @@ export class AppComponent {
   protected readonly routeTypeFilter = signal('');
   protected readonly relationshipFilter = signal('');
   protected readonly activeTripsOnly = signal(false);
+  protected readonly groupByRouteShortName = signal(false);
   protected readonly expandedRouteShortNames = signal<ReadonlySet<string>>(new Set());
   protected readonly filtersExpanded = signal(false);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
@@ -83,6 +84,11 @@ export class AppComponent {
     item.dto.timeline === undefined || item.dto.timelineError !== undefined));
   protected readonly viewItems = computed(() =>
     this.activeView() === 'timeline' ? this.timelineItems() : this.errorItems());
+  protected readonly canGroupByRouteShortName = computed(() => {
+    const agency = this.agencyFilter();
+    return Boolean(agency) && this.timelineItems().some((item) =>
+      item.agencyId === agency && item.dto.agency !== undefined && item.dto.route !== undefined);
+  });
 
   protected readonly agencyOptions = computed(() => {
     const routeType = this.routeTypeFilter();
@@ -240,6 +246,7 @@ export class AppComponent {
     this.agencyFilter.set('');
     this.routeTypeFilter.set('');
     this.activeTripsOnly.set(false);
+    this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
     this.selectedId.set(undefined);
     if (view === 'timeline') this.positionTimelineAtFeedTime();
@@ -249,9 +256,9 @@ export class AppComponent {
   protected updateAgency(event: Event): void {
     const agency = (event.target as HTMLSelectElement).value;
     this.agencyFilter.set(agency);
-    const firstGroup = this.timelineGroups()[0];
-    this.expandedRouteShortNames.set(agency && firstGroup ? new Set([firstGroup.name]) : new Set());
-    this.selectedId.set(firstGroup?.rows[0]?.item.id ?? this.timeline().rows[0]?.item.id);
+    this.groupByRouteShortName.set(false);
+    this.expandedRouteShortNames.set(new Set());
+    this.selectedId.set(this.timeline().rows[0]?.item.id);
   }
   protected updateRouteType(event: Event): void {
     this.routeTypeFilter.set((event.target as HTMLSelectElement).value);
@@ -267,6 +274,13 @@ export class AppComponent {
   protected updateActiveTripsOnly(event: Event): void {
     this.activeTripsOnly.set((event.target as HTMLInputElement).checked);
     this.selectedId.set(this.timeline().rows[0]?.item.id);
+  }
+  protected updateGroupByRouteShortName(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked && this.canGroupByRouteShortName();
+    this.groupByRouteShortName.set(checked);
+    const firstGroup = this.timelineGroups()[0];
+    this.expandedRouteShortNames.set(checked && firstGroup ? new Set([firstGroup.name]) : new Set());
+    this.selectedId.set(firstGroup?.rows[0]?.item.id ?? this.timeline().rows[0]?.item.id);
   }
   protected toggleRouteShortName(name: string): void {
     this.expandedRouteShortNames.update((current) => {
