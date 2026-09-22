@@ -68,7 +68,7 @@ export class AppComponent {
       const current = options.get(item.agencyId);
       options.set(item.agencyId, {
         id: item.agencyId,
-        name: item.agencyName,
+        name: this.agencyDetailLabel(item),
         count: (current?.count ?? 0) + 1
       });
     }
@@ -190,6 +190,13 @@ export class AppComponent {
 
   protected agencyLabel(item: TripUpdate): string {
     return item.agencyName;
+  }
+
+  protected agencyDetailLabel(item: TripUpdate): string {
+    const organisation = item.dto.businessOrganisation;
+    return organisation
+      ? `${organisation.abbreviationDe} · ${organisation.descriptionDe}`
+      : item.agencyName;
   }
 
   protected gtfsRouteUrl(item: TripUpdate): string {

@@ -141,7 +141,7 @@
               <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
               <dt>Agency</dt>
               <dd>
-                {{ agencyLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span>
+                {{ agencyDetailLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span>
                 @if (item.dto.businessOrganisation) {
                   <a class="ms-1 text-decoration-none" [href]="atlasBusinessOrganisationUrl(item)"
                     target="_blank" rel="noopener noreferrer" title="Open business organisation in Atlas"
