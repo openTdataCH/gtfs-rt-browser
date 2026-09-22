@@ -195,6 +195,11 @@ export class AppComponent {
     return `${APP_URLS.gtfsChRoutes}?route=${encodeURIComponent(item.routeId)}`;
   }
 
+  protected atlasBusinessOrganisationUrl(item: TripUpdate): string {
+    const sboid = item.dto.businessOrganisation?.sboid ?? '';
+    return `${APP_URLS.atlasBusinessOrganisations}/${encodeURIComponent(sboid)}`;
+  }
+
   protected delayClass(seconds?: number): string {
     if (seconds === undefined || seconds === 0) return 'text-bg-secondary';
     return seconds > 0 ? 'text-bg-danger' : 'text-bg-success';

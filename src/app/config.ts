@@ -6,6 +6,8 @@ export const APP_URLS = {
   gtfsRoutesLookup: 'https://tools.opentransportdata.swiss/gtfs-query/lookup/routes',
   gtfsDayTrips: 'https://tools.opentransportdata.swiss/gtfs-query/query_day_trips',
   gtfsChRoutes: 'https://gtfs.ch/routes',
+  atlasBusinessOrganisations:
+    'https://atlas.app.sbb.ch/business-organisation-directory/business-organisations',
   businessOrganisations:
     'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv'
 } as const;
