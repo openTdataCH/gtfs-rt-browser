@@ -399,6 +399,63 @@ async function decodeFeed(response: Response): Promise<DecodedFeed> {
   };
 }
 
+function readJsonOriginalTripIds(feed: Record<string, unknown>): ReadonlyMap<string, string> {
+  const originalTripIds = new Map<string, string>();
+  if (!Array.isArray(feed['entity'])) return originalTripIds;
+  for (const entity of feed['entity']) {
+    if (!isRecord(entity) || typeof entity['id'] !== 'string') continue;
+    const update = entity['tripUpdate'];
+    const trip = isRecord(update) ? update['trip'] : undefined;
+    if (!isRecord(trip)) continue;
+    const originalTripId = trip['originalTripId'] ?? trip['original_trip_id'];
+    if (typeof originalTripId === 'string' && originalTripId) {
+      originalTripIds.set(entity['id'], originalTripId);
+    }
+  }
+  return originalTripIds;
+}
+
+/** Reads Swiss TripDescriptor field 8, which the standard GTFS-RT bindings omit. */
+function readBinaryOriginalTripIds(feedBytes: Uint8Array): ReadonlyMap<string, string> {
+  const originalTripIds = new Map<string, string>();
+  let offset = 0;
+  while (offset < feedBytes.length) {
+    const tag = readVarint(feedBytes, offset);
+    offset = tag.offset;
+    if (Number(tag.value >> 3n) === 2 && Number(tag.value & 7n) === 2) {
+      const entity = readLengthDelimited(feedBytes, offset);
+      const entityId = readProtobufStringField(entity.value, 1);
+      const update = readProtobufMessageField(entity.value, 3);
+      const trip = update && readProtobufMessageField(update, 1);
+      const originalTripId = trip && readProtobufStringField(trip, 8);
+      if (entityId && originalTripId) originalTripIds.set(entityId, originalTripId);
+      offset = entity.offset;
+    } else {
+      offset = skipWireValue(feedBytes, offset, Number(tag.value & 7n));
+    }
+  }
+  return originalTripIds;
+}
+
+function readProtobufStringField(bytes: Uint8Array, fieldNumber: number): string | undefined {
+  const field = readProtobufMessageField(bytes, fieldNumber);
+  return field ? new TextDecoder('utf-8', { fatal: true }).decode(field) : undefined;
+}
+
+function readProtobufMessageField(bytes: Uint8Array, fieldNumber: number): Uint8Array | undefined {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const tag = readVarint(bytes, offset);
+    offset = tag.offset;
+    const wireType = Number(tag.value & 7n);
+    if (Number(tag.value >> 3n) === fieldNumber && wireType === 2) {
+      return readLengthDelimited(bytes, offset).value;
+    }
+    offset = skipWireValue(bytes, offset, wireType);
+  }
+  return undefined;
+}
+
 function readRequiredFeedVersion(header: object): string {
   const values = header as Record<string, unknown>;
   const feedVersion = values['feedVersion'] ?? values['gtfsVersion'] ?? values['gtfs_version'];
