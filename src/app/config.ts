@@ -4,6 +4,8 @@ export const APP_URLS = {
   gtfsCatalog: 'https://tools.opentransportdata.swiss/gtfs-static-dbs/gtfs-static-dbs.json',
   gtfsAgencyLookup: 'https://tools.opentransportdata.swiss/gtfs-query/lookup/agency',
   gtfsRoutesLookup: 'https://tools.opentransportdata.swiss/gtfs-query/lookup/routes',
+  gtfsStopsLookup: 'https://tools.opentransportdata.swiss/gtfs-query/lookup/stops',
+  gtfsTrip: 'https://tools.opentransportdata.swiss/gtfs-query/trip',
   gtfsDayTrips: 'https://tools.opentransportdata.swiss/gtfs-query/query_day_trips',
   gtfsChRoutes: 'https://gtfs.ch/routes',
   atlasBusinessOrganisations:
