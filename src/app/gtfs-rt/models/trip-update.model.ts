@@ -34,12 +34,24 @@ export class TripUpdate {
   public get tripId(): string { return this.dto.trip.tripId || '—'; }
   public get routeId(): string { return this.dto.trip.routeId || '—'; }
   public get hasRouteId(): boolean { return Boolean(this.dto.trip.routeId); }
-  public get agencyId(): string { return this.dto.agencyId || 'No_Agency'; }
-  public get agencyName(): string { return this.dto.agency?.agency_name || this.agencyId; }
+  public get agencyId(): string { return this.dto.agencyId || '_no_agency'; }
+  public get agencyName(): string {
+    const organisation = this.dto.businessOrganisation;
+    return organisation
+      ? `${organisation.descriptionDe} · ${organisation.abbreviationDe}`
+      : this.dto.agency?.agency_name || this.agencyId;
+  }
   public get vehicleLabel(): string { return this.dto.vehicle?.label || this.dto.vehicle?.id || '—'; }
   public get relationship(): string { return this.dto.trip.scheduleRelationship; }
   public get cancelled(): boolean { return this.relationship === 'CANCELED'; }
   public get skippedStopCount(): number { return this.stops.filter((stop) => stop.isSkipped).length; }
+  public get departureDayMinutes(): number | undefined { return this.dto.timeline?.departureDayMinutes; }
+  public get arrivalDayMinutes(): number | undefined { return this.dto.timeline?.arrivalDayMinutes; }
+  public get durationMinutes(): number | undefined {
+    return this.dto.timeline
+      ? this.dto.timeline.arrivalDayMinutes - this.dto.timeline.departureDayMinutes
+      : undefined;
+  }
 
   public matches(query: string): boolean {
     const normalized = query.trim().toLocaleLowerCase();
