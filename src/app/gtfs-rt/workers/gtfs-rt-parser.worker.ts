@@ -2,12 +2,13 @@
 
 import GtfsRealtimeBindings, { transit_realtime } from 'gtfs-realtime-bindings';
 import {
-  FeedMetadataDto, StopScheduleRelationship, StopTimeEventDto,
+  BusinessOrganisationDto, FeedMetadataDto, StopScheduleRelationship, StopTimeEventDto,
   StopTimeUpdateDto, TripScheduleRelationship, TripUpdateDto
 } from '../dto';
 import {
   AgencyJSON, GtfsDbLookupJSON, GtfsStaticDbCatalogItemJSON,
-  GtfsStaticDbCatalogJSON, RouteJSON
+  GtfsStaticDbCatalogJSON, GtfsDayTripTimelineResponse,
+  GtfsDayTripTimelineRow, RouteJSON
 } from '../../gtfs-static/dto';
 
 interface ParseRequest { type: 'parse'; url: string; }
@@ -18,10 +19,17 @@ interface DecodedFeed {
 interface LookupIndex {
   readonly routes: ReadonlyMap<string, RouteJSON>;
   readonly agencies: ReadonlyMap<string, AgencyJSON>;
+  readonly businessOrganisations: ReadonlyMap<string, BusinessOrganisationDto>;
+  readonly tripTimelines: ReadonlyMap<string, GtfsDayTripTimelineRow>;
+  readonly feedDay: string;
 }
 const CHUNK_SIZE = 250;
 const GTFS_CATALOG_URL = 'https://tools.opentransportdata.swiss/gtfs-static-dbs/gtfs-static-dbs.json';
 const GTFS_LOOKUPS_URL = 'https://tools.opentransportdata.swiss/gtfs-query/db_lookups';
+const BUSINESS_ORGANISATIONS_URL =
+  'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv';
+const GTFS_DAY_TRIPS_URL =
+  'https://tools.opentransportdata.swiss/gtfs-query/query_day_trips';
 
 addEventListener('message', ({ data }: MessageEvent<ParseRequest>) => {
   if (data.type === 'parse') void parseFeed(data.url);
@@ -40,7 +48,10 @@ async function parseFeed(url: string): Promise<void> {
     const catalogItem = resolveCatalogItem(catalog, headerFeedVersion);
     const feedVersion = catalogItem.gtfs_day;
     const gtfsDay = feedVersion;
+    const feedDay = formatSwissDay(feedTimestamp);
     const lookups = await fetchGtfsLookups(gtfsDay);
+    const businessOrganisations = await fetchBusinessOrganisations();
+    const tripTimelines = await fetchTripTimelines(gtfsDay, feedDay);
     console.info('GTFS static lookups parsed.', {
       gtfsDay,
       agencies: lookups.agency.rows.length,
@@ -49,13 +60,18 @@ async function parseFeed(url: string): Promise<void> {
     });
     const lookupIndex: LookupIndex = {
       routes: new Map(lookups.routes.rows.map((route) => [route.route_id, route])),
-      agencies: new Map(lookups.agency.rows.map((agency) => [agency.agency_id, agency]))
+      agencies: new Map(lookups.agency.rows.map((agency) => [agency.agency_id, agency])),
+      businessOrganisations,
+      tripTimelines: new Map(tripTimelines.rows.map((trip) => [trip.trip_id, trip])),
+      feedDay
     };
 
     const tripEntities = feed.entity.filter((entity) => entity.tripUpdate && !entity.isDeleted);
+    assertAgencySourcesPresent(tripEntities, lookupIndex);
 
     const metadata: FeedMetadataDto = {
       feedVersion,
+      feedDay,
       gtfsRealtimeVersion: feed.header.gtfsRealtimeVersion,
       incrementality: ['FULL_DATASET', 'DIFFERENTIAL'][feed.header.incrementality] as FeedMetadataDto['incrementality'] ?? 'UNKNOWN',
       timestamp: feedTimestamp,
@@ -74,6 +90,117 @@ async function parseFeed(url: string): Promise<void> {
   } catch (error: unknown) {
     postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown GTFS-RT parsing error.' });
   }
+}
+
+function formatSwissDay(timestamp: number): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(timestamp * 1000));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values['year']}-${values['month']}-${values['day']}`;
+}
+
+async function fetchTripTimelines(
+  gtfsDay: string,
+  feedDay: string
+): Promise<GtfsDayTripTimelineResponse> {
+  const url = new URL(GTFS_DAY_TRIPS_URL);
+  url.searchParams.set('gtfs_day', gtfsDay);
+  url.searchParams.set('day', feedDay);
+  url.searchParams.set('fields_profile', 'query_day_trips_timeline');
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`GTFS day-trip timeline request failed: ${response.status} ${response.statusText}`);
+  }
+  const json: unknown = await response.json();
+  if (!isGtfsDayTripTimelineResponse(json)) {
+    throw new Error('GTFS day-trip timeline response does not contain valid timeline rows.');
+  }
+  console.info('GTFS day-trip timelines parsed.', {
+    gtfsDay, feedDay, trips: json.rows.length
+  });
+  return json;
+}
+
+function isGtfsDayTripTimelineResponse(value: unknown): value is GtfsDayTripTimelineResponse {
+  return isRecord(value)
+    && Array.isArray(value['rows'])
+    && value['rows'].every((row) => isRecord(row)
+      && typeof row['trip_id'] === 'string'
+      && Number.isInteger(row['departure_day_minutes'])
+      && Number.isInteger(row['arrival_day_minutes']));
+}
+
+async function fetchBusinessOrganisations(): Promise<ReadonlyMap<string, BusinessOrganisationDto>> {
+  const response = await fetch(BUSINESS_ORGANISATIONS_URL);
+  if (!response.ok) {
+    throw new Error(`Business-organisation request failed: ${response.status} ${response.statusText}`);
+  }
+  const csv = await response.text();
+  const rows = parseDelimited(csv.replace(/^\uFEFF/, ''), ';');
+  const header = rows.shift();
+  if (!header) throw new Error('Business-organisation CSV is empty.');
+  const organisationNumberIndex = header.indexOf('organisationNumber');
+  const descriptionDeIndex = header.indexOf('descriptionDe');
+  const abbreviationDeIndex = header.indexOf('abbreviationDe');
+  if ([organisationNumberIndex, descriptionDeIndex, abbreviationDeIndex].some((index) => index < 0)) {
+    throw new Error('Business-organisation CSV is missing required columns.');
+  }
+
+  const organisations = new Map<string, BusinessOrganisationDto>();
+  for (const row of rows) {
+    const organisationNumber = row[organisationNumberIndex]?.trim();
+    if (!organisationNumber) continue;
+    organisations.set(organisationNumber, {
+      organisationNumber,
+      descriptionDe: row[descriptionDeIndex]?.trim() ?? '',
+      abbreviationDe: row[abbreviationDeIndex]?.trim() ?? ''
+    });
+  }
+  if (organisations.size === 0) throw new Error('Business-organisation CSV contains no organisations.');
+  return organisations;
+}
+
+function assertAgencySourcesPresent(
+  entities: readonly transit_realtime.FeedEntity[],
+  lookups: LookupIndex
+): void {
+  const missing = new Set<string>();
+  for (const entity of entities) {
+    const routeId = entity.tripUpdate?.trip.routeId;
+    const route = routeId ? lookups.routes.get(routeId) : undefined;
+    if (route
+      && !lookups.businessOrganisations.has(route.agency_id)
+      && !lookups.agencies.has(route.agency_id)) {
+      missing.add(route.agency_id);
+    }
+  }
+  if (missing.size > 0) {
+    throw new Error(
+      `No business organisation or GTFS agency found for agency_id: ${[...missing].sort().join(', ')}.`
+    );
+  }
+}
+
+function parseDelimited(input: string, delimiter: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    if (char === '"') {
+      if (quoted && input[index + 1] === '"') { field += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (char === delimiter && !quoted) { row.push(field); field = ''; }
+    else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && input[index + 1] === '\n') index += 1;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += char;
+  }
+  if (quoted) throw new Error('Business-organisation CSV contains an unterminated quoted field.');
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
 }
 
 function readRequiredFeedTimestamp(header: transit_realtime.FeedHeader): number {
@@ -337,6 +464,13 @@ function toTripUpdateDto(entity: transit_realtime.FeedEntity, lookups: LookupInd
   const trip = update.trip;
   const route = trip.routeId ? lookups.routes.get(trip.routeId) : undefined;
   const agency = route ? lookups.agencies.get(route.agency_id) : undefined;
+  const businessOrganisation = route
+    ? lookups.businessOrganisations.get(route.agency_id)
+    : undefined;
+  const timeline = trip.tripId ? lookups.tripTimelines.get(trip.tripId) : undefined;
+  const timelineResult = route
+    ? staticTimelineResult(trip.tripId, timeline, update.stopTimeUpdate, lookups.feedDay)
+    : realtimeTimelineResult(update.stopTimeUpdate, lookups.feedDay);
   return {
     entityId: entity.id,
     trip: {
@@ -353,7 +487,10 @@ function toTripUpdateDto(entity: transit_realtime.FeedEntity, lookups: LookupInd
     timestamp: present(update, 'timestamp') ? toNumber(update.timestamp) : undefined,
     delay: present(update, 'delay') ? update.delay : undefined,
     agencyId: route?.agency_id,
-    agency
+    agency,
+    businessOrganisation,
+    timeline: timelineResult.timeline,
+    timelineError: timelineResult.error
   };
 }
 
