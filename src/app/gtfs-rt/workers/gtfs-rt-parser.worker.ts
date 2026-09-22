@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import GtfsRealtimeBindings, { transit_realtime } from 'gtfs-realtime-bindings';
+import { APP_URLS } from '../../config';
 import {
   BusinessOrganisationDto, FeedMetadataDto, StopScheduleRelationship, StopTimeEventDto,
   StopTimeUpdateDto, TripScheduleRelationship, TripUpdateDto
@@ -24,13 +25,6 @@ interface LookupIndex {
   readonly feedDay: string;
 }
 const CHUNK_SIZE = 250;
-const GTFS_CATALOG_URL = 'https://tools.opentransportdata.swiss/gtfs-static-dbs/gtfs-static-dbs.json';
-const GTFS_AGENCY_LOOKUP_URL = 'https://tools.opentransportdata.swiss/gtfs-query/lookup/agency';
-const GTFS_ROUTES_LOOKUP_URL = 'https://tools.opentransportdata.swiss/gtfs-query/lookup/routes';
-const BUSINESS_ORGANISATIONS_URL =
-  'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv';
-const GTFS_DAY_TRIPS_URL =
-  'https://tools.opentransportdata.swiss/gtfs-query/query_day_trips';
 
 addEventListener('message', ({ data }: MessageEvent<ParseRequest>) => {
   if (data.type === 'parse') void parseFeed(data.url);
@@ -63,8 +57,8 @@ async function parseFeed(url: string): Promise<void> {
     postMessage({ type: 'metadata', metadata });
 
     const [agencyLookup, routesLookup] = await Promise.all([
-      fetchGtfsLookup(GTFS_AGENCY_LOOKUP_URL, gtfsDay, 'agency'),
-      fetchGtfsLookup(GTFS_ROUTES_LOOKUP_URL, gtfsDay, 'routes')
+      fetchGtfsLookup(APP_URLS.gtfsAgencyLookup, gtfsDay, 'agency'),
+      fetchGtfsLookup(APP_URLS.gtfsRoutesLookup, gtfsDay, 'routes')
     ]);
     const businessOrganisations = await fetchBusinessOrganisations();
     const tripTimelines = await fetchTripTimelines(gtfsDay, feedDay);
@@ -107,7 +101,7 @@ async function fetchTripTimelines(
   gtfsDay: string,
   feedDay: string
 ): Promise<GtfsDayTripTimelineResponse> {
-  const url = new URL(GTFS_DAY_TRIPS_URL);
+  const url = new URL(APP_URLS.gtfsDayTrips);
   url.searchParams.set('gtfs_day', gtfsDay);
   url.searchParams.set('day', feedDay);
   url.searchParams.set('fields_profile', 'query_day_trips_timeline');
@@ -135,7 +129,7 @@ function isGtfsDayTripTimelineResponse(value: unknown): value is GtfsDayTripTime
 }
 
 async function fetchBusinessOrganisations(): Promise<ReadonlyMap<string, BusinessOrganisationDto>> {
-  const response = await fetch(BUSINESS_ORGANISATIONS_URL);
+  const response = await fetch(APP_URLS.businessOrganisations);
   if (!response.ok) {
     throw new Error(`Business-organisation request failed: ${response.status} ${response.statusText}`);
   }
@@ -218,7 +212,7 @@ function readRequiredFeedTimestamp(header: transit_realtime.FeedHeader): number 
 }
 
 async function fetchGtfsCatalog(): Promise<GtfsStaticDbCatalogJSON> {
-  const response = await fetch(GTFS_CATALOG_URL);
+  const response = await fetch(APP_URLS.gtfsCatalog);
   if (!response.ok) {
     throw new Error(`GTFS static manifest request failed: ${response.status} ${response.statusText}`);
   }

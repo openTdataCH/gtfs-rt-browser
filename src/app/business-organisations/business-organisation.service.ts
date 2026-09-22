@@ -1,10 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { APP_URLS } from '../config';
 import { BusinessOrganisation, BusinessOrganisationCsvRecord } from './business-organisation.model';
-
-export const BUSINESS_ORGANISATIONS_URL =
-  'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv';
 
 const CSV_FIELDS: readonly (keyof BusinessOrganisationCsvRecord)[] = [
   'sboid', 'said', 'validFrom', 'validTo', 'organisationNumber', 'status',
@@ -31,7 +29,7 @@ export class BusinessOrganisationService {
   public load(): Promise<void> {
     if (this.loadPromise) return this.loadPromise;
     this.errorState.set(undefined);
-    this.loadPromise = firstValueFrom(this.http.get(BUSINESS_ORGANISATIONS_URL, { responseType: 'text' }))
+    this.loadPromise = firstValueFrom(this.http.get(APP_URLS.businessOrganisations, { responseType: 'text' }))
       .then((csv) => this.organisationsState.set(parseBusinessOrganisations(csv)))
       .catch((error: unknown) => {
         this.errorState.set(error instanceof Error ? error.message : 'Unable to load business organisations.');

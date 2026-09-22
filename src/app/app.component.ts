@@ -2,12 +2,11 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { APP_URLS } from './config';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 
-const GTFS_RT_FEED_URL = 
-  'https://tools.opentransportdata.swiss/data/gtfs-rt/gtfs-rt-latest.pb';
 const TIMELINE_CELL_MINUTES = 15;
 const TIMELINE_CELL_WIDTH = 72;
 const TIMELINE_LEAD_MINUTES = 60;
@@ -37,7 +36,7 @@ export class AppComponent {
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
-  protected readonly feedUrl = signal<string>(GTFS_RT_FEED_URL);
+  protected readonly feedUrl = signal<string>(APP_URLS.gtfsRtFeed);
   protected readonly parseState = signal<ParseState>(emptyParseState('idle'));
   protected readonly metadata = signal<FeedMetadataDto | undefined>(undefined);
   protected readonly feedNow = computed(() => {
