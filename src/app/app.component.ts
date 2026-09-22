@@ -224,6 +224,40 @@ export class AppComponent {
     return [...staticRows, ...unmatchedRows];
   });
 
+  protected readonly ojpSearchUrl = computed(() => {
+    const item = this.selected();
+    if (!item) return undefined;
+
+    const metadata = this.metadata();
+    const staticState = this.staticTripState();
+    const staticTrip = staticState.key === `${metadata?.feedVersion}|${item.tripId}`
+      ? staticState.detail?.result.trip : undefined;
+    const staticStops = staticTrip ? parseStaticStopTimes(staticTrip.stop_times_s) : [];
+    const from = ojpSearchStopId(staticStops[0]?.stopId || item.stops[0]?.stopId);
+    const to = ojpSearchStopId(staticStops.at(-1)?.stopId || item.stops.at(-1)?.stopId);
+    if (!from || !to || from === to) return undefined;
+
+    const startDate = item.dto.trip.startDate;
+    const serviceDay = startDate && /^\d{8}$/.test(startDate)
+      ? `${startDate.slice(0, 4)}-${startDate.slice(4, 6)}-${startDate.slice(6, 8)}`
+      : metadata?.feedDay;
+    const departure = staticTrip?.departure_time || staticStops[0]?.departure || item.dto.trip.startTime;
+    const realtimeDeparture = item.stops[0]?.dto.departure?.time ?? item.stops[0]?.dto.arrival?.time;
+    const scheduledDateTime = serviceDay && departure
+      ? scheduledSearchDateTime(serviceDay, departure) : undefined;
+    const dateTime = scheduledDateTime
+      ?? (realtimeDeparture !== undefined ? swissSearchDateTime(realtimeDeparture) : undefined);
+    if (!dateTime) return undefined;
+
+    const url = new URL('https://opentdatach.github.io/ojp-demo-app/search');
+    url.searchParams.set('from', from);
+    url.searchParams.set('to', to);
+    url.searchParams.set('day', dateTime.day);
+    url.searchParams.set('time', dateTime.time);
+    url.searchParams.set('do_search', 'yes');
+    return url.toString();
+  });
+
   protected readonly timeline = computed(() => {
     const items = this.filteredItems().filter((item) => item.dto.timeline !== undefined);
     const start = TIMELINE_START_MINUTES;
@@ -485,6 +519,36 @@ interface ParsedStaticStopTime {
   readonly stopId: string;
   readonly arrival?: string;
   readonly departure?: string;
+}
+
+function ojpSearchStopId(stopId?: string): string | undefined {
+  if (!stopId || stopId === '—') return undefined;
+  const sloid = /^(ch:1:sloid:[^:]+)(?::.*)?$/.exec(stopId);
+  return sloid?.[1] ?? stopId;
+}
+
+function scheduledSearchDateTime(day: string, departure: string): { day: string; time: string } | undefined {
+  const match = /^(\d+):([0-5]\d)(?::[0-5]\d)?$/.exec(departure);
+  if (!match) return undefined;
+  const date = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  const hour = Number(match[1]);
+  date.setUTCDate(date.getUTCDate() + Math.floor(hour / 24));
+  return {
+    day: date.toISOString().slice(0, 10),
+    time: `${String(hour % 24).padStart(2, '0')}:${match[2]}`
+  };
+}
+
+function swissSearchDateTime(timestamp: number): { day: string; time: string } {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(timestamp * 1_000)).map((part) => [part.type, part.value]));
+  return {
+    day: `${parts['year']}-${parts['month']}-${parts['day']}`,
+    time: `${parts['hour']}:${parts['minute']}`
+  };
 }
 
 function realtimeStopRow(stop: StopTimeUpdate, index: number): StopTableRow {
