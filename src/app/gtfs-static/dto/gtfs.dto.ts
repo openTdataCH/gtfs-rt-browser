@@ -118,3 +118,13 @@ export interface TripDetailResponseJSON {
     agency: AgencyJSON | null;
   };
 }
+
+export interface GtfsDayTripTimelineRow {
+  trip_id: string;
+  departure_day_minutes: number;
+  arrival_day_minutes: number;
+}
+
+export interface GtfsDayTripTimelineResponse {
+  rows: GtfsDayTripTimelineRow[];
+}
