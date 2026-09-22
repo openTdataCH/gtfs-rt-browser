@@ -37,9 +37,8 @@ export class TripUpdate {
   public get agencyId(): string { return this.dto.agencyId || '_no_agency'; }
   public get agencyName(): string {
     const organisation = this.dto.businessOrganisation;
-    return organisation
-      ? `${organisation.descriptionDe} · ${organisation.abbreviationDe}`
-      : this.dto.agency?.agency_name || this.agencyId;
+    if (organisation) return organisation.abbreviationDe;
+    return this.dto.agency?.agency_name || '_no_agency';
   }
   public get vehicleLabel(): string { return this.dto.vehicle?.label || this.dto.vehicle?.id || '—'; }
   public get relationship(): string { return this.dto.trip.scheduleRelationship; }
