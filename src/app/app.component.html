@@ -213,6 +213,10 @@
                 <dt>Route short name</dt><dd>{{ route.route_short_name || '—' }}</dd>
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
+              @if (staticTripState().detail?.result?.trip; as staticTrip) {
+                <dt>GTFS-S direction ID</dt><dd>{{ staticTrip.direction_id || '—' }}</dd>
+                <dt>GTFS-S  hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
+              }
             </dl>
 
             <section class="mt-4">
