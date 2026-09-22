@@ -16,6 +16,7 @@ interface ParseRequest { type: 'parse'; url: string; }
 interface DecodedFeed {
   readonly feed: transit_realtime.FeedMessage;
   readonly feedVersion: string;
+  readonly originalTripIds: ReadonlyMap<string, string>;
 }
 interface LookupIndex {
   readonly routes: ReadonlyMap<string, RouteJSON>;
@@ -38,7 +39,7 @@ async function parseFeed(url: string): Promise<void> {
 
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Feed request failed: ${response.status} ${response.statusText}`);
-    const { feed, feedVersion: headerFeedVersion } = await decodeFeed(response);
+    const { feed, feedVersion: headerFeedVersion, originalTripIds } = await decodeFeed(response);
     const feedTimestamp = readRequiredFeedTimestamp(feed.header);
     const catalogItem = resolveCatalogItem(catalog, headerFeedVersion);
     const feedVersion = catalogItem.gtfs_day;
@@ -82,7 +83,7 @@ async function parseFeed(url: string): Promise<void> {
 
     for (let index = 0; index < tripEntities.length; index += CHUNK_SIZE) {
       const updates = tripEntities.slice(index, index + CHUNK_SIZE)
-        .map((entity) => toTripUpdateDto(entity, lookupIndex));
+        .map((entity) => toTripUpdateDto(entity, lookupIndex, originalTripIds.get(entity.id)));
       postMessage({ type: 'trip-updates', updates, processed: Math.min(index + CHUNK_SIZE, tripEntities.length) });
       await new Promise<void>((resolve) => setTimeout(resolve));
     }
@@ -361,7 +362,7 @@ async function decodeFeed(response: Response): Promise<DecodedFeed> {
     const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes);
     const feedVersion = readBinaryGtfsVersion(bytes);
     if (!feedVersion) throw new Error('GTFS-RT protobuf header is missing required gtfs_version field 4.');
-    return { feed, feedVersion };
+    return { feed, feedVersion, originalTripIds: readBinaryOriginalTripIds(bytes) };
   }
 
   let json: unknown;
@@ -386,7 +387,8 @@ async function decodeFeed(response: Response): Promise<DecodedFeed> {
     try {
       return {
         feed: GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json),
-        feedVersion
+        feedVersion,
+        originalTripIds: readJsonOriginalTripIds(json)
       };
     } catch {
       throw new Error(`Invalid GTFS-RT JSON FeedMessage: ${validationError}`);
@@ -395,7 +397,8 @@ async function decodeFeed(response: Response): Promise<DecodedFeed> {
 
   return {
     feed: GtfsRealtimeBindings.transit_realtime.FeedMessage.fromObject(json),
-    feedVersion
+    feedVersion,
+    originalTripIds: readJsonOriginalTripIds(json)
   };
 }
 
@@ -552,7 +555,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function toTripUpdateDto(entity: transit_realtime.FeedEntity, lookups: LookupIndex): TripUpdateDto {
+function toTripUpdateDto(
+  entity: transit_realtime.FeedEntity,
+  lookups: LookupIndex,
+  originalTripId?: string
+): TripUpdateDto {
   const update = entity.tripUpdate!;
   const trip = update.trip;
   const route = trip.routeId ? lookups.routes.get(trip.routeId) : undefined;
@@ -568,6 +575,7 @@ function toTripUpdateDto(entity: transit_realtime.FeedEntity, lookups: LookupInd
     entityId: entity.id,
     trip: {
       tripId: value(trip.tripId), routeId: value(trip.routeId),
+      originalTripId,
       directionId: present(trip, 'directionId') ? trip.directionId : undefined,
       startTime: value(trip.startTime), startDate: value(trip.startDate),
       scheduleRelationship: tripRelationship(trip.scheduleRelationship)
