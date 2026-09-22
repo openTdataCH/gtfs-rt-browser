@@ -207,14 +207,21 @@
               <div><h2 class="h4 mb-1">Trip {{ item.tripId }}</h2></div>
             </div>
             <dl class="detail-grid">
-              @if (item.dto.trip.originalTripId; as originalTripId) {
+              @if (item.dto.trip.originalTripId || ojpSearchUrl()) {
                 <dt>GTFS-RT originalTripId</dt>
-                <dd class="font-monospace">
-                  {{ originalTripId }}
-                  @if (ojpTripUrl(originalTripId); as url) {
-                    <a class="ms-1 text-decoration-none" [href]="url" target="_blank" rel="noopener noreferrer"
-                      title="Open trip in OJP demo app" aria-label="Open trip in OJP demo app">↗</a>
-                  }
+                <dd>
+                  <div class="font-monospace">{{ item.dto.trip.originalTripId || '—' }}</div>
+                  <div class="d-flex flex-wrap gap-3 mt-1">
+                    @if (ojpSearchUrl(); as url) {
+                      <a [href]="url" target="_blank" rel="noopener noreferrer">OJP TripRequest ↗</a>
+                    }
+                    @if (item.dto.trip.originalTripId; as originalTripId) {
+                      @if (ojpTripUrl(originalTripId); as url) {
+                        <span>·</span>
+                        <a [href]="url" target="_blank" rel="noopener noreferrer">OJP TripInfoRequest ↗</a>
+                      }
+                    }
+                  </div>
                 </dd>
               }
               <dt>Agency</dt>
