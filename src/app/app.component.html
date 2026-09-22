@@ -45,12 +45,19 @@
       <div class="filter-controls" [class.mobile-collapsed]="!filtersExpanded()">
         <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
         @if (activeView() === 'timeline') {
-          <select class="form-select form-select-sm agency-select" [value]="agencyFilter()" (change)="updateAgency($event)">
-            <option value="">All agencies ({{ agencyOptions().length }})</option>
-            @for (agency of agencyOptions(); track agency.id) {
-              <option [value]="agency.id">{{ agency.name }} ({{ agency.count }})</option>
-            }
-          </select>
+          <div class="agency-filter input-group input-group-sm">
+            <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
+              <option value="">All agencies ({{ agencyOptions().length }})</option>
+              @for (agency of agencyOptions(); track agency.id) {
+                <option [value]="agency.id">{{ agency.name }} ({{ agency.count }})</option>
+              }
+            </select>
+            <button type="button" class="btn btn-outline-secondary agency-sort-button" (click)="toggleAgencySort()"
+              [attr.title]="agencySort() === 'name' ? 'Sorted by name; click to sort by result count' : 'Sorted by result count; click to sort by name'"
+              [attr.aria-label]="agencySort() === 'name' ? 'Sort agencies by result count' : 'Sort agencies by name'">
+              {{ agencySort() === 'name' ? 'A–Z' : 'Count ↓' }}
+            </button>
+          </div>
           <select class="form-select form-select-sm route-type-select" [value]="routeTypeFilter()" (change)="updateRouteType($event)">
             <option value="">All route types ({{ routeTypeOptions().length }})</option>
             @for (routeType of routeTypeOptions(); track routeType.id) {

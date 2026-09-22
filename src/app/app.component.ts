@@ -102,6 +102,7 @@ export class AppComponent {
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal('');
   protected readonly agencyFilter = signal('');
+  protected readonly agencySort = signal<'name' | 'count'>('name');
   protected readonly routeTypeFilter = signal('');
   protected readonly relationshipFilter = signal('');
   protected readonly activeTripsOnly = signal(false);
@@ -141,6 +142,7 @@ export class AppComponent {
     return [...options.values()].sort((left, right) => {
       if (left.id === '_no_agency') return -1;
       if (right.id === '_no_agency') return 1;
+      if (this.agencySort() === 'count' && left.count !== right.count) return right.count - left.count;
       return left.name.localeCompare(right.name);
     });
   });
@@ -375,6 +377,9 @@ export class AppComponent {
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
   protected updateSearch(event: Event): void { this.searchTerm.set((event.target as HTMLInputElement).value); }
+  protected toggleAgencySort(): void {
+    this.agencySort.update((sort) => sort === 'name' ? 'count' : 'name');
+  }
   protected updateAgency(event: Event): void {
     const agency = (event.target as HTMLSelectElement).value;
     this.agencyFilter.set(agency);
