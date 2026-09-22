@@ -6,7 +6,7 @@ import {
   StopTimeUpdateDto, TripScheduleRelationship, TripUpdateDto
 } from '../dto';
 import {
-  AgencyJSON, GtfsDbLookupJSON, GtfsStaticDbCatalogItemJSON,
+  AgencyJSON, GtfsDbLookupAgency, GtfsDbLookupRoutes, GtfsStaticDbCatalogItemJSON,
   GtfsStaticDbCatalogJSON, GtfsDayTripTimelineResponse,
   GtfsDayTripTimelineRow, RouteJSON
 } from '../../gtfs-static/dto';
@@ -25,7 +25,8 @@ interface LookupIndex {
 }
 const CHUNK_SIZE = 250;
 const GTFS_CATALOG_URL = 'https://tools.opentransportdata.swiss/gtfs-static-dbs/gtfs-static-dbs.json';
-const GTFS_LOOKUPS_URL = 'https://tools.opentransportdata.swiss/gtfs-query/db_lookups';
+const GTFS_AGENCY_LOOKUP_URL = 'https://tools.opentransportdata.swiss/gtfs-query/lookup/agency';
+const GTFS_ROUTES_LOOKUP_URL = 'https://tools.opentransportdata.swiss/gtfs-query/lookup/routes';
 const BUSINESS_ORGANISATIONS_URL =
   'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv';
 const GTFS_DAY_TRIPS_URL =
@@ -49,18 +50,20 @@ async function parseFeed(url: string): Promise<void> {
     const feedVersion = catalogItem.gtfs_day;
     const gtfsDay = feedVersion;
     const feedDay = formatSwissDay(feedTimestamp);
-    const lookups = await fetchGtfsLookups(gtfsDay);
+    const [agencyLookup, routesLookup] = await Promise.all([
+      fetchGtfsLookup(GTFS_AGENCY_LOOKUP_URL, gtfsDay, 'agency'),
+      fetchGtfsLookup(GTFS_ROUTES_LOOKUP_URL, gtfsDay, 'routes')
+    ]);
     const businessOrganisations = await fetchBusinessOrganisations();
     const tripTimelines = await fetchTripTimelines(gtfsDay, feedDay);
     console.info('GTFS static lookups parsed.', {
       gtfsDay,
-      agencies: lookups.agency.rows.length,
-      routes: lookups.routes.rows.length,
-      stops: lookups.stops.rows.length
+      agencies: agencyLookup.rows.length,
+      routes: routesLookup.rows.length
     });
     const lookupIndex: LookupIndex = {
-      routes: new Map(lookups.routes.rows.map((route) => [route.route_id, route])),
-      agencies: new Map(lookups.agency.rows.map((agency) => [agency.agency_id, agency])),
+      routes: new Map(routesLookup.rows.map((route) => [route.route_id, route])),
+      agencies: new Map(agencyLookup.rows.map((agency) => [agency.agency_id, agency])),
       businessOrganisations,
       tripTimelines: new Map(tripTimelines.rows.map((trip) => [trip.trip_id, trip])),
       feedDay
@@ -285,26 +288,33 @@ function formatGtfsDay(feedVersion: string): string {
   return `${year}-${month}-${day}`;
 }
 
-async function fetchGtfsLookups(gtfsDay: string): Promise<GtfsDbLookupJSON> {
-  const url = new URL(GTFS_LOOKUPS_URL);
+function fetchGtfsLookup(
+  endpoint: string,
+  gtfsDay: string,
+  lookupName: 'agency'
+): Promise<GtfsDbLookupAgency>;
+function fetchGtfsLookup(
+  endpoint: string,
+  gtfsDay: string,
+  lookupName: 'routes'
+): Promise<GtfsDbLookupRoutes>;
+async function fetchGtfsLookup(
+  endpoint: string,
+  gtfsDay: string,
+  lookupName: 'agency' | 'routes'
+): Promise<GtfsDbLookupAgency | GtfsDbLookupRoutes> {
+  const url = new URL(endpoint);
   url.searchParams.set('gtfs_day', gtfsDay);
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`GTFS lookup request failed: ${response.status} ${response.statusText}`);
+    throw new Error(`GTFS ${lookupName} lookup request failed: ${response.status} ${response.statusText}`);
   }
 
   const json: unknown = await response.json();
-  if (!isGtfsDbLookupJSON(json)) {
-    throw new Error('GTFS lookup response does not match the expected agency/routes/stops structure.');
+  if (!isLookup(json, lookupName)) {
+    throw new Error(`GTFS ${lookupName} lookup response does not match the expected structure.`);
   }
-  return json;
-}
-
-function isGtfsDbLookupJSON(value: unknown): value is GtfsDbLookupJSON {
-  if (!isRecord(value)) return false;
-  return isLookup(value['agency'], 'agency')
-    && isLookup(value['routes'], 'routes')
-    && isLookup(value['stops'], 'stops');
+  return json as GtfsDbLookupAgency | GtfsDbLookupRoutes;
 }
 
 function isLookup(value: unknown, name: string): boolean {
