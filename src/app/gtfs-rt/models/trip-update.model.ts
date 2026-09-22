@@ -56,6 +56,7 @@ export class TripUpdate {
     const normalized = query.trim().toLocaleLowerCase();
     if (!normalized) return true;
     return [this.id, this.tripId, this.routeId, this.vehicleLabel, this.agencyId, this.agencyName,
+      this.dto.businessOrganisation?.sboid ?? '',
       ...this.stops.map((stop) => stop.stopId)]
       .some((value) => value.toLocaleLowerCase().includes(normalized));
   }
