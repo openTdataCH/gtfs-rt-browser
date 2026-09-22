@@ -4,7 +4,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, e
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { APP_URLS } from './config';
 import { FeedMetadataDto } from './gtfs-rt/dto';
-import { TripUpdate } from './gtfs-rt/models';
+import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 import { extendedRouteTypeLabel } from './gtfs-static/route-types';
 import { StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
@@ -35,6 +35,18 @@ interface StaticTripState {
   readonly status: 'idle' | 'loading' | 'loaded' | 'error';
   readonly detail?: TripDetailResponseJSON;
   readonly message?: string;
+}
+
+interface StopTableRow {
+  readonly key: string;
+  readonly sequence?: number;
+  readonly stopId: string;
+  readonly name?: string;
+  readonly relationship: string;
+  readonly arrival?: string;
+  readonly departure?: string;
+  readonly delay?: number;
+  readonly isSkipped: boolean;
 }
 
 @Component({
@@ -180,24 +192,36 @@ export class AppComponent {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });
-  protected readonly staticStopTimes = computed(() => {
+  protected readonly stopTableRows = computed<readonly StopTableRow[]>(() => {
     const item = this.selected();
     const trip = this.staticTripState().detail?.result.trip;
     const metadata = this.metadata();
-    if (!item || !trip || !metadata) return [];
-    return parseStaticStopTimes(trip.stop_times_s).map((stop, index) => {
-      const realtime = item.stops.find((candidate) => candidate.stopId === stop.stopId) ?? item.stops[index];
+    if (!item) return [];
+    if (!trip || !metadata) return item.stops.map((stop, index) => realtimeStopRow(stop, index));
+
+    const unmatchedRealtime = new Set(item.stops);
+    const staticRows = parseStaticStopTimes(trip.stop_times_s).map((stop, index): StopTableRow => {
+      const realtime = findBestStopMatch(stop.stopId, index, unmatchedRealtime);
+      if (realtime) unmatchedRealtime.delete(realtime);
       const arrivalDelay = eventDelay(
         realtime?.dto.arrival, stop.arrival, item.dto.trip.startDate, metadata.feedDay);
       const departureDelay = eventDelay(
         realtime?.dto.departure, stop.departure, item.dto.trip.startDate, metadata.feedDay);
       return {
-        ...stop,
+        key: `static:${index}:${stop.stopId}`,
         sequence: index + 1,
         name: this.stopsById().get(stop.stopId)?.stop_name,
-        delay: departureDelay ?? arrivalDelay
+        stopId: stop.stopId,
+        relationship: realtime?.relationship ?? 'NO_DATA',
+        arrival: stop.arrival,
+        departure: stop.departure,
+        delay: departureDelay ?? arrivalDelay,
+        isSkipped: realtime?.isSkipped ?? false
       };
     });
+    const unmatchedRows = [...unmatchedRealtime].map((stop, index) =>
+      realtimeStopRow(stop, staticRows.length + index));
+    return [...staticRows, ...unmatchedRows];
   });
 
   protected readonly timeline = computed(() => {
@@ -442,6 +466,70 @@ interface ParsedStaticStopTime {
   readonly stopId: string;
   readonly arrival?: string;
   readonly departure?: string;
+}
+
+function realtimeStopRow(stop: StopTimeUpdate, index: number): StopTableRow {
+  return {
+    key: `realtime:${index}:${stop.stopId}`,
+    sequence: stop.dto.stopSequence,
+    stopId: stop.stopId,
+    relationship: stop.relationship,
+    arrival: formatEpochTime(stop.dto.arrival?.time),
+    departure: formatEpochTime(stop.dto.departure?.time),
+    delay: stop.effectiveDelay,
+    isSkipped: stop.isSkipped
+  };
+}
+
+function findBestStopMatch(
+  staticStopId: string,
+  staticIndex: number,
+  candidates: ReadonlySet<StopTimeUpdate>
+): StopTimeUpdate | undefined {
+  let best: { stop: StopTimeUpdate; score: number } | undefined;
+  let candidateIndex = 0;
+  for (const stop of candidates) {
+    const idScore = stopIdMatchScore(staticStopId, stop.stopId);
+    if (idScore > 0) {
+      const sequenceDistance = stop.dto.stopSequence === undefined
+        ? Math.abs(staticIndex - candidateIndex)
+        : Math.abs(staticIndex + 1 - stop.dto.stopSequence);
+      const score = idScore * 1_000 - sequenceDistance;
+      if (!best || score > best.score) best = { stop, score };
+    }
+    candidateIndex += 1;
+  }
+  return best?.stop;
+}
+
+function stopIdMatchScore(left: string, right: string): number {
+  const normalizedLeft = normalizeStopId(left);
+  const normalizedRight = normalizeStopId(right);
+  if (!normalizedLeft || !normalizedRight) return 0;
+  if (normalizedLeft === normalizedRight) return 3;
+
+  const baseLeft = baseStopId(normalizedLeft);
+  const baseRight = baseStopId(normalizedRight);
+  if (baseLeft.length >= 5 && baseLeft === baseRight) return 2;
+  if (Math.min(normalizedLeft.length, normalizedRight.length) >= 5
+    && (normalizedLeft.startsWith(normalizedRight) || normalizedRight.startsWith(normalizedLeft))) return 1;
+  return 0;
+}
+
+function normalizeStopId(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/[^a-z0-9:]/g, '');
+}
+
+function baseStopId(value: string): string {
+  const parts = value.split(':').filter(Boolean);
+  return parts.find((part) => /\d{5,}/.test(part)) ?? parts[0] ?? value;
+}
+
+function formatEpochTime(timestamp?: number): string | undefined {
+  if (timestamp === undefined) return undefined;
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  }).format(new Date(timestamp * 1_000));
 }
 
 function parseStaticStopTimes(value: string): ParsedStaticStopTime[] {

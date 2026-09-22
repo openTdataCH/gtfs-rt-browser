@@ -219,59 +219,34 @@
               </dd>
             </dl>
 
-            @if (item.dto.staticTripAvailable) {
-              <section class="mt-4">
-                <div class="d-flex align-items-center mb-2">
-                  <h3 class="h6 mb-0">GTFS static stop times</h3>
-                  @if (staticTripState().status === 'loaded') {
-                    <span class="badge text-bg-secondary ms-2">{{ staticStopTimes().length }}</span>
-                  }
-                </div>
-                @if (staticTripState().status === 'loading') {
-                  <div class="small text-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Loading static trip…</div>
-                } @else if (staticTripState().status === 'error') {
-                  <div class="alert alert-warning py-2 mb-0">{{ staticTripState().message }}</div>
-                } @else if (staticTripState().status === 'loaded' && !staticTripState().detail?.result?.trip) {
-                  <div class="small text-secondary">No GTFS static trip was found.</div>
-                } @else if (staticStopTimes().length) {
-                  @if (stopsLookupError(); as message) {
-                    <div class="alert alert-warning py-2">Stop names unavailable: {{ message }}</div>
-                  }
-                  <div class="table-responsive border rounded-2">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                      <thead><tr><th>#</th><th>Stop</th><th>Arrival</th><th>Departure</th><th class="text-end">Delay</th></tr></thead>
-                      <tbody>
-                        @for (stop of staticStopTimes(); track stop.sequence + ':' + stop.stopId) {
-                          <tr>
-                            <td>{{ stop.sequence }}</td>
-                            <td>
-                              @if (stop.name) { <div>{{ stop.name }}</div> }
-                              <div class="font-monospace small text-secondary">{{ stop.stopId }}</div>
-                            </td>
-                            <td>{{ stop.arrival || '—' }}</td>
-                            <td>{{ stop.departure || '—' }}</td>
-                            <td class="text-end"><span class="badge" [class]="delayClass(stop.delay)">{{ delayLabel(stop.delay) }}</span></td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                }
-              </section>
-            }
-
             <section class="mt-4">
-              <div class="d-flex align-items-center mb-2"><h3 class="h6 mb-0">Stop time updates</h3><span class="badge text-bg-secondary ms-2">{{ item.stops.length }}</span></div>
+              <div class="d-flex align-items-center mb-2">
+                <h3 class="h6 mb-0">Stop times</h3>
+                <span class="badge text-bg-secondary ms-2">{{ stopTableRows().length }}</span>
+                @if (staticTripState().status === 'loading') {
+                  <span class="spinner-border spinner-border-sm text-secondary ms-2" title="Loading GTFS static stop times"></span>
+                }
+              </div>
+              @if (staticTripState().status === 'error') {
+                <div class="alert alert-warning py-2">Static stop times unavailable: {{ staticTripState().message }}</div>
+              } @else if (stopsLookupError(); as message) {
+                <div class="alert alert-warning py-2">Stop names unavailable: {{ message }}</div>
+              }
               <div class="table-responsive border rounded-2">
                 <table class="table table-sm table-hover align-middle mb-0">
                   <thead><tr><th>#</th><th>Stop</th><th>Relationship</th><th>Arrival</th><th>Departure</th><th class="text-end">Delay</th></tr></thead>
                   <tbody>
-                    @for (stop of item.stops; track stop.dto.stopSequence + ':' + stop.stopId) {
+                    @for (stop of stopTableRows(); track stop.key) {
                       <tr [class.table-warning]="stop.isSkipped">
-                        <td>{{ stop.dto.stopSequence ?? '—' }}</td><td class="font-monospace">{{ stop.stopId }}</td><td>{{ stop.relationship }}</td>
-                        <td>{{ stop.dto.arrival?.time ? ((stop.dto.arrival!.time! * 1000) | date:'HH:mm:ss') : '—' }}</td>
-                        <td>{{ stop.dto.departure?.time ? ((stop.dto.departure!.time! * 1000) | date:'HH:mm:ss') : '—' }}</td>
-                        <td class="text-end"><span class="badge" [class]="delayClass(stop.effectiveDelay)">{{ delayLabel(stop.effectiveDelay) }}</span></td>
+                        <td>{{ stop.sequence ?? '—' }}</td>
+                        <td>
+                          @if (stop.name) { <div>{{ stop.name }}</div> }
+                          <div class="font-monospace" [class.small]="stop.name" [class.text-secondary]="stop.name">{{ stop.stopId }}</div>
+                        </td>
+                        <td>{{ stop.relationship }}</td>
+                        <td>{{ stop.arrival || '—' }}</td>
+                        <td>{{ stop.departure || '—' }}</td>
+                        <td class="text-end"><span class="badge" [class]="delayClass(stop.delay)">{{ delayLabel(stop.delay) }}</span></td>
                       </tr>
                     }
                   </tbody>
