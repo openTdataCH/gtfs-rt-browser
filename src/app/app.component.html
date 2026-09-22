@@ -141,21 +141,21 @@
               <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
               <dt>Agency</dt>
               <dd>
-                @if (item.dto.businessOrganisation; as organisation) {
-                  <a [href]="atlasBusinessOrganisationUrl(item)" target="_blank" rel="noopener noreferrer">
-                    {{ agencyLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span> · ↗
-                  </a>
-                } @else {
-                  {{ agencyLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span>
+                {{ agencyLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span>
+                @if (item.dto.businessOrganisation) {
+                  <a class="ms-1 text-decoration-none" [href]="atlasBusinessOrganisationUrl(item)"
+                    target="_blank" rel="noopener noreferrer" title="Open business organisation in Atlas"
+                    aria-label="Open business organisation in Atlas">↗</a>
                 }
               </dd>
               <dt>Route ID</dt>
               <dd>
+                {{ item.routeId }}
                 @if (item.hasRouteId && item.dto.agency) {
-                  <a [href]="gtfsRouteUrl(item)" target="_blank" rel="noopener noreferrer">
-                    {{ item.routeId }} ↗
-                  </a>
-                } @else { {{ item.routeId }} }
+                  <a class="ms-1 text-decoration-none" [href]="gtfsRouteUrl(item)"
+                    target="_blank" rel="noopener noreferrer" title="Open route on gtfs.ch"
+                    aria-label="Open route on gtfs.ch">↗</a>
+                }
               </dd>
               @if (item.dto.route; as route) {
                 <dt>Route short name</dt><dd>{{ route.route_short_name || '—' }}</dd>
