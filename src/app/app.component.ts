@@ -100,7 +100,7 @@ export class AppComponent {
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
-  protected readonly searchTerm = signal('');
+  protected readonly searchTerm = signal(new URLSearchParams(window.location.search).get('q') ?? '');
   protected readonly agencyFilter = signal('');
   protected readonly agencySort = signal<'name' | 'count'>('name');
   protected readonly routeTypeFilter = signal('');
@@ -376,7 +376,14 @@ export class AppComponent {
     if (view === 'timeline') this.positionTimelineAtFeedTime();
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
-  protected updateSearch(event: Event): void { this.searchTerm.set((event.target as HTMLInputElement).value); }
+  protected updateSearch(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.searchTerm.set(value);
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set('q', value);
+    else url.searchParams.delete('q');
+    window.history.replaceState(window.history.state, '', url);
+  }
   protected toggleAgencySort(): void {
     this.agencySort.update((sort) => sort === 'name' ? 'count' : 'name');
   }
