@@ -6,6 +6,7 @@ import { APP_URLS } from './config';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
+import { extendedRouteTypeLabel } from './gtfs-static/route-types';
 
 const TIMELINE_CELL_MINUTES = 15;
 const TIMELINE_CELL_WIDTH = 72;
@@ -51,6 +52,7 @@ export class AppComponent {
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal('');
   protected readonly agencyFilter = signal('');
+  protected readonly routeTypeFilter = signal('');
   protected readonly relationshipFilter = signal('');
   protected readonly filtersExpanded = signal(false);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
@@ -63,8 +65,13 @@ export class AppComponent {
     this.activeView() === 'timeline' ? this.timelineItems() : this.errorItems());
 
   protected readonly agencyOptions = computed(() => {
+    const routeType = this.routeTypeFilter();
+    const relationship = this.relationshipFilter();
     const options = new Map<string, { id: string; name: string; count: number }>();
     for (const item of this.timelineItems()) {
+      if (!item.matches(this.searchTerm())
+        || (routeType && this.routeTypeKey(item) !== routeType)
+        || (relationship && item.relationship !== relationship)) continue;
       const current = options.get(item.agencyId);
       options.set(item.agencyId, {
         id: item.agencyId,
@@ -80,16 +87,49 @@ export class AppComponent {
   });
 
   protected readonly relationshipOptions = computed(() => {
+    const agency = this.agencyFilter();
+    const routeType = this.routeTypeFilter();
     const counts = new Map<string, number>();
-    for (const item of this.viewItems()) counts.set(item.relationship, (counts.get(item.relationship) ?? 0) + 1);
+    for (const item of this.viewItems()) {
+      if (!item.matches(this.searchTerm())
+        || (agency && item.agencyId !== agency)
+        || (routeType && this.routeTypeKey(item) !== routeType)) continue;
+      counts.set(item.relationship, (counts.get(item.relationship) ?? 0) + 1);
+    }
     return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  protected readonly routeTypeOptions = computed(() => {
+    const agency = this.agencyFilter();
+    const relationship = this.relationshipFilter();
+    const options = new Map<string, { id: string; name: string; count: number }>();
+    for (const item of this.timelineItems()) {
+      if (!item.matches(this.searchTerm())
+        || (agency && item.agencyId !== agency)
+        || (relationship && item.relationship !== relationship)) continue;
+      const routeType = item.dto.route?.route_type;
+      const id = routeType === undefined ? '_no_route_type' : String(routeType);
+      const current = options.get(id);
+      options.set(id, {
+        id,
+        name: routeType === undefined ? '_no_route_type' : extendedRouteTypeLabel(routeType),
+        count: (current?.count ?? 0) + 1
+      });
+    }
+    return [...options.values()].sort((left, right) => {
+      if (left.id === '_no_route_type') return -1;
+      if (right.id === '_no_route_type') return 1;
+      return Number(left.id) - Number(right.id);
+    });
   });
 
   protected readonly filteredItems = computed(() => {
     const agency = this.agencyFilter();
+    const routeType = this.routeTypeFilter();
     const relationship = this.relationshipFilter();
     return this.viewItems().filter((item) => item.matches(this.searchTerm())
       && (!agency || item.agencyId === agency)
+      && (!routeType || this.routeTypeKey(item) === routeType)
       && (!relationship || item.relationship === relationship));
   });
 
@@ -170,6 +210,7 @@ export class AppComponent {
   protected selectView(view: 'timeline' | 'errors'): void {
     this.activeView.set(view);
     this.agencyFilter.set('');
+    this.routeTypeFilter.set('');
     this.selectedId.set(undefined);
     if (view === 'timeline') this.positionTimelineAtFeedTime();
   }
@@ -179,7 +220,17 @@ export class AppComponent {
     this.agencyFilter.set((event.target as HTMLSelectElement).value);
     this.selectedId.set(this.timeline().rows[0]?.item.id);
   }
-  protected updateRelationship(event: Event): void { this.relationshipFilter.set((event.target as HTMLSelectElement).value); }
+  protected updateRouteType(event: Event): void {
+    this.routeTypeFilter.set((event.target as HTMLSelectElement).value);
+    this.selectedId.set(this.timeline().rows[0]?.item.id);
+  }
+  protected updateRelationship(event: Event): void {
+    this.relationshipFilter.set((event.target as HTMLSelectElement).value);
+    const first = this.activeView() === 'timeline'
+      ? this.timeline().rows[0]?.item
+      : this.filteredItems()[0];
+    this.selectedId.set(first?.id);
+  }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
 
   protected delayLabel(seconds?: number): string {
@@ -197,6 +248,10 @@ export class AppComponent {
     return organisation
       ? `${organisation.abbreviationDe} · ${organisation.descriptionDe}`
       : item.agencyName;
+  }
+
+  protected routeTypeLabel(routeType: number): string {
+    return extendedRouteTypeLabel(routeType);
   }
 
   protected gtfsRouteUrl(item: TripUpdate): string {
@@ -235,6 +290,11 @@ export class AppComponent {
       const leadWidth = TIMELINE_LEAD_MINUTES / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH;
       element.scrollLeft = Math.max(0, Math.min(nowLeft - leadWidth, element.scrollWidth - element.clientWidth));
     });
+  }
+
+  private routeTypeKey(item: TripUpdate): string {
+    const routeType = item.dto.route?.route_type;
+    return routeType === undefined ? '_no_route_type' : String(routeType);
   }
 }
 
