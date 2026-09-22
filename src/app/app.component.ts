@@ -370,7 +370,7 @@ export class AppComponent {
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
 
   protected delayLabel(seconds?: number): string {
-    if (seconds === undefined) return 'No delay data';
+    if (seconds === undefined) return '';
     const sign = seconds > 0 ? '+' : '';
     return `${sign}${Math.round(seconds / 60)} min`;
   }
