@@ -6,7 +6,8 @@ import { FeedMetadataDto } from './gtfs-rt/dto';
 import { TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 
-const GTFS_RT_FEED_URL = 'https://api.opentransportdata.swiss/la/gtfs-rt';
+const GTFS_RT_FEED_URL = 
+  'https://tools.opentransportdata.swiss/data/gtfs-rt/gtfs-rt-latest.pb';
 
 interface ParseState {
   readonly status: 'idle' | 'loading' | 'complete' | 'error';
