@@ -49,7 +49,6 @@ export class AppComponent {
   protected readonly searchTerm = signal('');
   protected readonly agencyFilter = signal('');
   protected readonly relationshipFilter = signal('');
-  protected readonly delayedOnly = signal(false);
   protected readonly filtersExpanded = signal(false);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
@@ -88,8 +87,7 @@ export class AppComponent {
     const relationship = this.relationshipFilter();
     return this.viewItems().filter((item) => item.matches(this.searchTerm())
       && (!agency || item.agencyId === agency)
-      && (!relationship || item.relationship === relationship)
-      && (!this.delayedOnly() || (item.maxDelay ?? 0) > 0));
+      && (!relationship || item.relationship === relationship));
   });
 
   protected readonly selected = computed(() => {
@@ -177,7 +175,6 @@ export class AppComponent {
     this.agencyFilter.set((event.target as HTMLSelectElement).value);
   }
   protected updateRelationship(event: Event): void { this.relationshipFilter.set((event.target as HTMLSelectElement).value); }
-  protected updateDelayedOnly(event: Event): void { this.delayedOnly.set((event.target as HTMLInputElement).checked); }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
 
   protected delayLabel(seconds?: number): string {

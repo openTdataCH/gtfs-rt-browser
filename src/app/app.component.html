@@ -50,10 +50,6 @@
           <option value="">All relationships</option>
           @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count }})</option> }
         </select>
-        <div class="form-check ms-1">
-          <input id="delayed-only" type="checkbox" class="form-check-input" [checked]="delayedOnly()" (change)="updateDelayedOnly($event)">
-          <label class="form-check-label small" for="delayed-only">Delayed only</label>
-        </div>
       </div>
       @if (parseState().status === 'error') { <span class="text-danger small">{{ parseState().message }}</span> }
     </div>
