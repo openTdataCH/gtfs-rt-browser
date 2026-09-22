@@ -48,12 +48,25 @@ export class AppComponent {
     const now = this.feedNow();
     return now === undefined ? undefined : Math.round((now.getTime() - this.browserNow()) / 60_000);
   });
+  protected readonly feedDayMinute = computed(() => {
+    const metadata = this.metadata();
+    if (!metadata) return undefined;
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date(metadata.timestamp * 1000)).map((part) => [part.type, part.value]));
+    const date = `${parts['year']}-${parts['month']}-${parts['day']}`;
+    const dayOffset = (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${metadata.feedDay}T00:00:00Z`)) / 86_400_000;
+    return dayOffset * 1_440 + Number(parts['hour']) * 60
+      + Number(parts['minute']) + Number(parts['second']) / 60;
+  });
   protected readonly items = signal<readonly TripUpdate[]>([]);
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal('');
   protected readonly agencyFilter = signal('');
   protected readonly routeTypeFilter = signal('');
   protected readonly relationshipFilter = signal('');
+  protected readonly activeTripsOnly = signal(false);
   protected readonly filtersExpanded = signal(false);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
@@ -70,6 +83,7 @@ export class AppComponent {
     const options = new Map<string, { id: string; name: string; count: number }>();
     for (const item of this.timelineItems()) {
       if (!item.matches(this.searchTerm())
+        || (this.activeTripsOnly() && !this.isActiveAtFeedTime(item))
         || (routeType && this.routeTypeKey(item) !== routeType)
         || (relationship && item.relationship !== relationship)) continue;
       const current = options.get(item.agencyId);
@@ -92,6 +106,7 @@ export class AppComponent {
     const counts = new Map<string, number>();
     for (const item of this.viewItems()) {
       if (!item.matches(this.searchTerm())
+        || (this.activeTripsOnly() && !this.isActiveAtFeedTime(item))
         || (agency && item.agencyId !== agency)
         || (routeType && this.routeTypeKey(item) !== routeType)) continue;
       counts.set(item.relationship, (counts.get(item.relationship) ?? 0) + 1);
@@ -105,6 +120,7 @@ export class AppComponent {
     const options = new Map<string, { id: string; name: string; count: number }>();
     for (const item of this.timelineItems()) {
       if (!item.matches(this.searchTerm())
+        || (this.activeTripsOnly() && !this.isActiveAtFeedTime(item))
         || (agency && item.agencyId !== agency)
         || (relationship && item.relationship !== relationship)) continue;
       const routeType = item.dto.route?.route_type;
@@ -130,7 +146,8 @@ export class AppComponent {
     return this.viewItems().filter((item) => item.matches(this.searchTerm())
       && (!agency || item.agencyId === agency)
       && (!routeType || this.routeTypeKey(item) === routeType)
-      && (!relationship || item.relationship === relationship));
+      && (!relationship || item.relationship === relationship)
+      && (!this.activeTripsOnly() || this.isActiveAtFeedTime(item)));
   });
 
   protected readonly selected = computed(() => {
@@ -162,17 +179,9 @@ export class AppComponent {
   });
 
   protected readonly timelineNowLeft = computed(() => {
-    const metadata = this.metadata();
     const timeline = this.timeline();
-    if (!metadata || timeline.end <= timeline.start) return undefined;
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
-    }).formatToParts(new Date(metadata.timestamp * 1000)).map((part) => [part.type, part.value]));
-    const date = `${parts['year']}-${parts['month']}-${parts['day']}`;
-    const dayOffset = (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${metadata.feedDay}T00:00:00Z`)) / 86_400_000;
-    const minute = dayOffset * 1_440 + Number(parts['hour']) * 60
-      + Number(parts['minute']) + Number(parts['second']) / 60;
+    const minute = this.feedDayMinute();
+    if (minute === undefined || timeline.end <= timeline.start) return undefined;
     if (minute < timeline.start || minute > timeline.end) return undefined;
     return (minute - timeline.start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH;
   });
@@ -211,6 +220,7 @@ export class AppComponent {
     this.activeView.set(view);
     this.agencyFilter.set('');
     this.routeTypeFilter.set('');
+    this.activeTripsOnly.set(false);
     this.selectedId.set(undefined);
     if (view === 'timeline') this.positionTimelineAtFeedTime();
   }
@@ -230,6 +240,10 @@ export class AppComponent {
       ? this.timeline().rows[0]?.item
       : this.filteredItems()[0];
     this.selectedId.set(first?.id);
+  }
+  protected updateActiveTripsOnly(event: Event): void {
+    this.activeTripsOnly.set((event.target as HTMLInputElement).checked);
+    this.selectedId.set(this.timeline().rows[0]?.item.id);
   }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
 
@@ -295,6 +309,14 @@ export class AppComponent {
   private routeTypeKey(item: TripUpdate): string {
     const routeType = item.dto.route?.route_type;
     return routeType === undefined ? '_no_route_type' : String(routeType);
+  }
+
+  private isActiveAtFeedTime(item: TripUpdate): boolean {
+    const now = this.feedDayMinute();
+    const departure = item.departureDayMinutes;
+    const arrival = item.arrivalDayMinutes;
+    return now !== undefined && departure !== undefined && arrival !== undefined
+      && departure <= now && now <= arrival;
   }
 }
 

@@ -57,6 +57,11 @@
               <option [value]="routeType.id">{{ routeType.name }} ({{ routeType.count }})</option>
             }
           </select>
+          <div class="form-check ms-1">
+            <input id="active-trips-only" type="checkbox" class="form-check-input"
+              [checked]="activeTripsOnly()" (change)="updateActiveTripsOnly($event)">
+            <label class="form-check-label small" for="active-trips-only">Active trips</label>
+          </div>
         }
         <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
           <option value="">All relationships</option>
