@@ -11,6 +11,7 @@ export interface TripUpdateDto {
   readonly agency?: AgencyJSON;
   readonly route?: RouteJSON;
   readonly businessOrganisation?: BusinessOrganisationDto;
+  readonly staticTripAvailable: boolean;
   readonly timeline?: TripTimelineDto;
   readonly timelineError?: string;
 }
