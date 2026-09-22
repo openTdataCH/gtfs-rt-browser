@@ -9,6 +9,12 @@ export interface TripUpdateDto {
   readonly delay?: number;
   readonly agencyId?: string;
   readonly agency?: AgencyJSON;
+  readonly businessOrganisation?: BusinessOrganisationDto;
+}
+export interface BusinessOrganisationDto {
+  readonly organisationNumber: string;
+  readonly descriptionDe: string;
+  readonly abbreviationDe: string;
 }
 
 export interface TripDescriptorDto {
