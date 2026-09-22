@@ -100,7 +100,10 @@
           </div>
           <div #timelineScroll class="timeline-scroll flex-grow-1 overflow-auto">
             <div class="timeline-table" [style.--timeline-width.px]="timeline().width">
-              <div class="timeline-corner border-end border-bottom bg-white">Trip / agency</div>
+              <div class="timeline-corner border-end border-bottom bg-white">
+                <span class="timeline-row-index">idx</span>
+                <span>Trip / agency</span>
+              </div>
               <div class="timeline-axis border-bottom bg-white" [style.width.px]="timeline().width">
                 @for (cell of timeline().cells; track cell.minute) {
                   <div class="timeline-cell" [class.timeline-cell-major]="cell.major" [style.left.px]="cell.left">{{ cell.label }}</div>
@@ -118,6 +121,7 @@
                 @for (group of timelineGroups(); track group.name) {
                   <button type="button" class="timeline-group-label border-0 border-end border-bottom text-start"
                     (click)="toggleRouteShortName(group.name)">
+                    <span class="timeline-row-index" aria-hidden="true"></span>
                     <span class="group-chevron">{{ expandedRouteShortNames().has(group.name) ? '▾' : '▸' }}</span>
                     <strong>{{ group.name }}</strong>
                     <span class="badge text-bg-secondary ms-2">{{ group.rows.length }}</span>
@@ -127,8 +131,11 @@
                     @for (row of group.rows; track row.item.id) {
                       <button type="button" class="timeline-label timeline-label-child border-0 border-end border-bottom bg-white text-start"
                         [class.selected]="selectedId() === row.item.id" (click)="select(row.item)">
-                        <strong>{{ row.item.tripId }}</strong>
-                        <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
+                        <span class="timeline-row-index">{{ row.index }}</span>
+                        <span class="timeline-trip-info">
+                          <strong>{{ row.item.tripId }}</strong>
+                          <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
+                        </span>
                       </button>
                       <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
                         <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
@@ -144,8 +151,11 @@
                 @for (row of timeline().rows; track row.item.id) {
                   <button type="button" class="timeline-label border-0 border-end border-bottom bg-white text-start"
                     [class.selected]="selectedId() === row.item.id" (click)="select(row.item)">
-                    <strong>{{ row.item.tripId }}</strong>
-                    <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
+                    <span class="timeline-row-index">{{ row.index }}</span>
+                    <span class="timeline-trip-info">
+                      <strong>{{ row.item.tripId }}</strong>
+                      <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
+                    </span>
                   </button>
                   <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
                     <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"

@@ -26,6 +26,7 @@ interface ParseState {
 
 interface TimelineRow {
   readonly item: TripUpdate;
+  readonly index: number;
   readonly left: number;
   readonly width: number;
 }
@@ -270,11 +271,12 @@ export class AppComponent {
     });
     const rows = items
       .filter((item) => item.arrivalDayMinutes! > start && item.departureDayMinutes! < end)
-      .map((item) => {
+      .map((item, index) => {
         const from = Math.max(start, item.departureDayMinutes!);
         const to = Math.min(end, item.arrivalDayMinutes!);
         return {
           item,
+          index: index + 1,
           left: (from - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH,
           width: Math.max(3, (to - from) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH)
         };
@@ -289,8 +291,13 @@ export class AppComponent {
       const rows = groups.get(name) ?? [];
       groups.set(name, [...rows, row]);
     }
-    return [...groups].map(([name, rows]) => ({ name, rows }))
+    const sorted = [...groups].map(([name, rows]) => ({ name, rows }))
       .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
+    let index = 0;
+    return sorted.map((group) => ({
+      ...group,
+      rows: group.rows.map((row) => ({ ...row, index: ++index }))
+    }));
   });
 
   protected readonly timelineNowLeft = computed(() => {
