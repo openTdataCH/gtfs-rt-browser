@@ -10,7 +10,15 @@ export interface TripUpdateDto {
   readonly agencyId?: string;
   readonly agency?: AgencyJSON;
   readonly businessOrganisation?: BusinessOrganisationDto;
+  readonly timeline?: TripTimelineDto;
+  readonly timelineError?: string;
 }
+
+export interface TripTimelineDto {
+  readonly departureDayMinutes: number;
+  readonly arrivalDayMinutes: number;
+}
+
 export interface BusinessOrganisationDto {
   readonly organisationNumber: string;
   readonly descriptionDe: string;
@@ -56,6 +64,7 @@ export type StopScheduleRelationship =
 
 export interface FeedMetadataDto {
   readonly feedVersion: string;
+  readonly feedDay: string;
   readonly gtfsRealtimeVersion: string;
   readonly incrementality: 'FULL_DATASET' | 'DIFFERENTIAL' | 'UNKNOWN';
   readonly timestamp: number;
