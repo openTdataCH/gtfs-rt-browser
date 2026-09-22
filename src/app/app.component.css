@@ -79,10 +79,16 @@
 .timeline-block-added { border-color: #a66308; background: #b86e09; }
 .list-pane { flex: 0 0 42%; min-width: 24rem; background: #fff; }
 .detail-pane {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 min(64rem, 40vw) !important;
   min-width: 32rem;
+  overflow: hidden;
   border-left: 1px solid #dee2e6;
 }
+.detail-summary { flex: 0 0 auto; }
+.stop-times-section { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.stop-times-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .message-row { height: 92px; color: inherit; }
 .message-row:hover { background: #f4f8fc !important; }
 .message-row.selected { background: #e9f2ff !important; box-shadow: inset 4px 0 #0d6efd; }
@@ -101,6 +107,11 @@
 .detail-grid dt { color: #6c757d; font-weight: 500; }
 thead { position: sticky; top: 0; z-index: 1; }
 th { white-space: nowrap; background: #f8f9fa; }
+.stop-times-scroll th:first-child, .stop-times-scroll td:first-child {
+  width: 2.75rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
 @media (max-width: 767.98px) {
   .app-header { padding-inline: 1rem !important; }
@@ -116,4 +127,7 @@ th { white-space: nowrap; background: #f8f9fa; }
     width: 100%;
     overflow: visible !important;
   }
+  .detail-summary { position: sticky; top: 0; z-index: 2; background: #fff; }
+  .stop-times-section { display: block; }
+  .stop-times-scroll { max-height: 50dvh; }
 }

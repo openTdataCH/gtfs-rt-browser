@@ -148,7 +148,7 @@
                         <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
                           [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
                           [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
-                          <span>{{ row.item.tripId }}</span>
+                          <span>{{ row.item.dto.route?.route_short_name || row.item.routeId }} · {{ row.item.tripId }}</span>
                         </button>
                       </div>
                     }
@@ -169,7 +169,7 @@
                       [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
                       [class.timeline-block-added]="row.item.relationship === 'ADDED'"
                       [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
-                      <span>{{ row.item.tripId }}</span>
+                      <span>{{ row.item.dto.route?.route_short_name || row.item.routeId }} · {{ row.item.tripId }}</span>
                     </button>
                   </div>
                 }
@@ -204,8 +204,9 @@
         </section>
         }
 
-        <aside class="detail-pane flex-grow-1 overflow-auto bg-white p-4" aria-label="Selected trip update">
+        <aside class="detail-pane flex-grow-1 bg-white p-4" aria-label="Selected trip update">
           @if (selected(); as item) {
+            <div class="detail-summary">
             <div class="d-flex align-items-center gap-3 mb-4">
               <span class="route-badge route-badge-large"
                 [class.route-badge-scheduled]="item.relationship === 'SCHEDULED'"
@@ -258,8 +259,7 @@
                 <dt>GTFS-S  hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
               }
             </dl>
-
-            <section class="mt-4">
+            <div class="mt-4">
               <div class="d-flex align-items-center mb-2">
                 <h3 class="h6 mb-0">Stop times</h3>
                 <span class="badge text-bg-secondary ms-2">{{ stopTableRows().length }}</span>
@@ -272,7 +272,10 @@
               } @else if (stopsLookupError(); as message) {
                 <div class="alert alert-warning py-2">Stop names unavailable: {{ message }}</div>
               }
-              <div class="table-responsive border rounded-2">
+            </div>
+            </div>
+            <section class="stop-times-section" aria-label="Stop times">
+              <div class="stop-times-scroll table-responsive border rounded-2">
                 <table class="table table-sm table-hover align-middle mb-0">
                   <thead><tr><th>#</th><th>Stop</th><th>Relationship</th><th>Arrival</th><th>Departure</th><th class="text-end">Delay</th></tr></thead>
                   <tbody>
