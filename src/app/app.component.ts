@@ -8,6 +8,8 @@ import { GtfsRtStreamService } from './gtfs-rt/services';
 
 const GTFS_RT_FEED_URL = 
   'https://tools.opentransportdata.swiss/data/gtfs-rt/gtfs-rt-latest.pb';
+const TIMELINE_CELL_MINUTES = 15;
+const TIMELINE_CELL_WIDTH = 72;
 
 interface ParseState {
   readonly status: 'idle' | 'loading' | 'complete' | 'error';
@@ -50,23 +52,25 @@ export class AppComponent {
   protected readonly relationshipFilter = signal('');
   protected readonly delayedOnly = signal(false);
   protected readonly filtersExpanded = signal(false);
-  protected readonly activeView = signal<'messages' | 'errors'>('messages');
+  protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
-  protected readonly messageItems = computed(() => this.items().filter((item) => item.hasRouteId));
-  protected readonly errorItems = computed(() => this.items().filter((item) => !item.hasRouteId));
+  protected readonly timelineItems = computed(() => this.items().filter((item) =>
+    item.dto.timeline !== undefined && item.dto.timelineError === undefined));
+  protected readonly errorItems = computed(() => this.items().filter((item) =>
+    item.dto.timeline === undefined || item.dto.timelineError !== undefined));
   protected readonly viewItems = computed(() =>
-    this.activeView() === 'messages' ? this.messageItems() : this.errorItems());
+    this.activeView() === 'timeline' ? this.timelineItems() : this.errorItems());
 
   protected readonly routeOptions = computed(() => {
     const counts = new Map<string, number>();
-    for (const item of this.messageItems()) counts.set(item.routeId, (counts.get(item.routeId) ?? 0) + 1);
+    for (const item of this.timelineItems()) counts.set(item.routeId, (counts.get(item.routeId) ?? 0) + 1);
     return [...counts].map(([id, count]) => ({ id, count }))
       .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
   });
 
   protected readonly agencyOptions = computed(() => {
     const options = new Map<string, { id: string; name: string; count: number }>();
-    for (const item of this.messageItems()) {
+    for (const item of this.timelineItems()) {
       const current = options.get(item.agencyId);
       options.set(item.agencyId, {
         id: item.agencyId,
@@ -74,7 +78,11 @@ export class AppComponent {
         count: (current?.count ?? 0) + 1
       });
     }
-    return [...options.values()].sort((left, right) => left.name.localeCompare(right.name));
+    return [...options.values()].sort((left, right) => {
+      if (left.id === '_no_agency') return -1;
+      if (right.id === '_no_agency') return 1;
+      return left.name.localeCompare(right.name);
+    });
   });
 
   protected readonly relationshipOptions = computed(() => {
@@ -97,6 +105,48 @@ export class AppComponent {
   protected readonly selected = computed(() => {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
+  });
+
+  protected readonly timeline = computed(() => {
+    const items = this.filteredItems().filter((item) => item.dto.timeline !== undefined);
+    if (items.length === 0) return { start: 0, end: 0, width: 0, cells: [], rows: [] };
+    const first = Math.min(...items.map((item) => item.departureDayMinutes!));
+    const last = Math.max(...items.map((item) => item.arrivalDayMinutes!));
+    const start = Math.floor(Math.max(0, first) / TIMELINE_CELL_MINUTES) * TIMELINE_CELL_MINUTES;
+    const end = Math.ceil(Math.min(2_880, last) / TIMELINE_CELL_MINUTES) * TIMELINE_CELL_MINUTES;
+    const width = Math.max(0, (end - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH);
+    const cells = Array.from({ length: Math.max(0, (end - start) / TIMELINE_CELL_MINUTES) }, (_, index) => {
+      const minute = start + index * TIMELINE_CELL_MINUTES;
+      return { minute, left: index * TIMELINE_CELL_WIDTH, label: this.dayMinuteLabel(minute) };
+    });
+    const rows = items
+      .filter((item) => item.arrivalDayMinutes! > start && item.departureDayMinutes! < end)
+      .map((item) => {
+        const from = Math.max(start, item.departureDayMinutes!);
+        const to = Math.min(end, item.arrivalDayMinutes!);
+        return {
+          item,
+          left: (from - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH,
+          width: Math.max(3, (to - from) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH)
+        };
+      });
+    return { start, end, width, cells, rows };
+  });
+
+  protected readonly timelineNowLeft = computed(() => {
+    const metadata = this.metadata();
+    const timeline = this.timeline();
+    if (!metadata || timeline.end <= timeline.start) return undefined;
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date(metadata.timestamp * 1000)).map((part) => [part.type, part.value]));
+    const date = `${parts['year']}-${parts['month']}-${parts['day']}`;
+    const dayOffset = (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${metadata.feedDay}T00:00:00Z`)) / 86_400_000;
+    const minute = dayOffset * 1_440 + Number(parts['hour']) * 60
+      + Number(parts['minute']) + Number(parts['second']) / 60;
+    if (minute < timeline.start || minute > timeline.end) return undefined;
+    return (minute - timeline.start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH;
   });
 
   public constructor() {
@@ -126,7 +176,7 @@ export class AppComponent {
   }
 
   protected select(item: TripUpdate): void { this.selectedId.set(item.id); }
-  protected selectView(view: 'messages' | 'errors'): void {
+  protected selectView(view: 'timeline' | 'errors'): void {
     this.activeView.set(view);
     this.routeFilter.set('');
     this.agencyFilter.set('');
@@ -135,7 +185,9 @@ export class AppComponent {
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
   protected updateSearch(event: Event): void { this.searchTerm.set((event.target as HTMLInputElement).value); }
   protected updateRoute(event: Event): void { this.routeFilter.set((event.target as HTMLSelectElement).value); }
-  protected updateAgency(event: Event): void { this.agencyFilter.set((event.target as HTMLSelectElement).value); }
+  protected updateAgency(event: Event): void {
+    this.agencyFilter.set((event.target as HTMLSelectElement).value);
+  }
   protected updateRelationship(event: Event): void { this.relationshipFilter.set((event.target as HTMLSelectElement).value); }
   protected updateDelayedOnly(event: Event): void { this.delayedOnly.set((event.target as HTMLInputElement).checked); }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
@@ -146,6 +198,10 @@ export class AppComponent {
     return `${sign}${Math.round(seconds / 60)} min`;
   }
 
+  protected agencyLabel(item: TripUpdate): string {
+    return item.agencyName;
+  }
+
   protected delayClass(seconds?: number): string {
     if (seconds === undefined || seconds === 0) return 'text-bg-secondary';
     return seconds > 0 ? 'text-bg-danger' : 'text-bg-success';
@@ -153,6 +209,15 @@ export class AppComponent {
 
   protected signedMinutes(minutes: number): string {
     return `${minutes > 0 ? '+' : ''}${minutes}min`;
+  }
+
+  protected dayMinuteLabel(minutes?: number): string {
+    if (minutes === undefined) return '—';
+    const dayOffset = Math.floor(minutes / 1_440);
+    const minuteOfDay = ((minutes % 1_440) + 1_440) % 1_440;
+    const hours = Math.floor(minuteOfDay / 60).toString().padStart(2, '0');
+    const mins = (minuteOfDay % 60).toString().padStart(2, '0');
+    return `${hours}:${mins}${dayOffset ? ` (+${dayOffset}d)` : ''}`;
   }
 }
 

@@ -21,10 +21,10 @@
     <div class="toolbar d-flex flex-wrap align-items-center gap-2 border-bottom bg-white px-3 py-2">
       <div class="btn-group btn-group-sm" role="group" aria-label="Trip update views">
         <button type="button" class="btn"
-          [class.btn-primary]="activeView() === 'messages'"
-          [class.btn-outline-primary]="activeView() !== 'messages'"
-          (click)="selectView('messages')">
-          Trip updates <span class="badge text-bg-light ms-1">{{ messageItems().length }}</span>
+          [class.btn-primary]="activeView() === 'timeline'"
+          [class.btn-outline-primary]="activeView() !== 'timeline'"
+          (click)="selectView('timeline')">
+          Timeline <span class="badge text-bg-light ms-1">{{ timelineItems().length }}</span>
         </button>
         <button type="button" class="btn"
           [class.btn-danger]="activeView() === 'errors'"
@@ -38,7 +38,7 @@
       </button>
       <div class="filter-controls" [class.mobile-collapsed]="!filtersExpanded()">
         <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
-        @if (activeView() === 'messages') {
+        @if (activeView() === 'timeline') {
           <select class="form-select form-select-sm agency-select" [value]="agencyFilter()" (change)="updateAgency($event)">
             <option value="">All agencies ({{ agencyOptions().length }})</option>
             @for (agency of agencyOptions(); track agency.id) {
@@ -69,10 +69,48 @@
       </section>
     } @else {
       <div class="workspace d-flex flex-grow-1 overflow-hidden">
-        <section class="list-pane d-flex flex-column border-end" aria-label="Trip updates">
+        @if (activeView() === 'timeline') {
+        <section class="timeline-pane d-flex flex-column flex-grow-1 overflow-hidden" aria-label="Trip timeline">
           <div class="small text-secondary border-bottom bg-white px-3 py-2">
-            {{ filteredItems().length }} of {{ viewItems().length }}
-            {{ activeView() === 'messages' ? 'trip updates' : 'errors without routeId' }}
+            {{ timeline().rows.length }} trips · {{ dayMinuteLabel(timeline().start) }} → {{ dayMinuteLabel(timeline().end) }} · 15-minute grid
+          </div>
+          <div class="timeline-scroll flex-grow-1 overflow-auto">
+            <div class="timeline-table" [style.--timeline-width.px]="timeline().width">
+              <div class="timeline-corner border-end border-bottom bg-white">Trip / agency</div>
+              <div class="timeline-axis border-bottom bg-white" [style.width.px]="timeline().width">
+                @for (cell of timeline().cells; track cell.minute) {
+                  <div class="timeline-cell" [style.left.px]="cell.left">{{ cell.label }}</div>
+                }
+              </div>
+              <div class="timeline-grid-lines" [style.width.px]="timeline().width">
+                @for (cell of timeline().cells; track cell.minute) {
+                  <div class="timeline-grid-line" [style.left.px]="cell.left"></div>
+                }
+                @if (timelineNowLeft(); as nowLeft) {
+                  <div class="timeline-now" [style.left.px]="nowLeft" title="GTFS-RT feed timestamp"></div>
+                }
+              </div>
+              @for (row of timeline().rows; track row.item.id) {
+                <button type="button" class="timeline-label border-0 border-end border-bottom bg-white text-start"
+                  [class.selected]="selectedId() === row.item.id" (click)="select(row.item)">
+                  <strong>{{ row.item.tripId }}</strong>
+                  <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
+                </button>
+                <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
+                  <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
+                    [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
+                    [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
+                    <span>{{ row.item.tripId }}</span>
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        </section>
+        } @else {
+        <section class="list-pane d-flex flex-column border-end" aria-label="Timeline errors">
+          <div class="small text-secondary border-bottom bg-white px-3 py-2">
+            {{ filteredItems().length }} of {{ viewItems().length }} timeline errors
             @if (metadata(); as feed) { · {{ feed.entityCount }} total feed entities }
           </div>
           <cdk-virtual-scroll-viewport class="message-viewport flex-grow-1" [itemSize]="92" [minBufferPx]="552" [maxBufferPx]="1104">
@@ -85,12 +123,13 @@
                 <span class="badge ms-auto" [class]="delayClass(item.maxDelay)">{{ delayLabel(item.maxDelay) }}</span>
               </div>
               <div class="small text-secondary text-truncate mt-1">
-                {{ item.agencyName }} · {{ item.vehicleLabel }} · {{ item.stops.length }} stops · {{ item.relationship }}
+                {{ item.dto.timelineError || 'Timeline bounds unavailable' }}
               </div>
               <div class="entity-id text-secondary text-truncate">{{ item.id }}</div>
             </button>
           </cdk-virtual-scroll-viewport>
         </section>
+        }
 
         <aside class="detail-pane flex-grow-1 overflow-auto bg-white p-4" aria-label="Selected trip update">
           @if (selected(); as item) {
@@ -102,11 +141,16 @@
             <dl class="detail-grid">
               <dt>Service date</dt><dd>{{ item.dto.trip.startDate || '—' }} {{ item.dto.trip.startTime || '' }}</dd>
               <dt>Relationship</dt><dd>{{ item.relationship }}</dd>
-              <dt>Agency</dt><dd>{{ item.agencyName }} <span class="text-secondary">({{ item.agencyId }})</span></dd>
+              <dt>Agency</dt><dd>{{ agencyLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span></dd>
               <dt>Direction</dt><dd>{{ item.dto.trip.directionId ?? '—' }}</dd>
               <dt>Vehicle</dt><dd>{{ item.vehicleLabel }}</dd>
               <dt>Updated</dt><dd>{{ item.updatedAt ? (item.updatedAt | date:'medium') : '—' }}</dd>
               <dt>Delay range</dt><dd>{{ delayLabel(item.minDelay) }} → {{ delayLabel(item.maxDelay) }}</dd>
+              <dt>Static timeline</dt>
+              <dd>
+                {{ dayMinuteLabel(item.departureDayMinutes) }} → {{ dayMinuteLabel(item.arrivalDayMinutes) }}
+                @if (item.durationMinutes !== undefined) { · {{ item.durationMinutes }} min }
+              </dd>
             </dl>
 
             <section class="mt-4">
