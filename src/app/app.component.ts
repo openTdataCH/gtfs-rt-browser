@@ -22,6 +22,12 @@ interface ParseState {
   readonly message: string;
 }
 
+interface TimelineRow {
+  readonly item: TripUpdate;
+  readonly left: number;
+  readonly width: number;
+}
+
 @Component({
   selector: 'app-root',
   imports: [ScrollingModule, DatePipe, DecimalPipe],
@@ -67,6 +73,7 @@ export class AppComponent {
   protected readonly routeTypeFilter = signal('');
   protected readonly relationshipFilter = signal('');
   protected readonly activeTripsOnly = signal(false);
+  protected readonly expandedRouteShortNames = signal<ReadonlySet<string>>(new Set());
   protected readonly filtersExpanded = signal(false);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
@@ -178,6 +185,17 @@ export class AppComponent {
     return { start, end, width, cells, rows };
   });
 
+  protected readonly timelineGroups = computed(() => {
+    const groups = new Map<string, TimelineRow[]>();
+    for (const row of this.timeline().rows) {
+      const name = row.item.dto.route?.route_short_name || '_no_route_short_name';
+      const rows = groups.get(name) ?? [];
+      groups.set(name, [...rows, row]);
+    }
+    return [...groups].map(([name, rows]) => ({ name, rows }))
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
+  });
+
   protected readonly timelineNowLeft = computed(() => {
     const timeline = this.timeline();
     const minute = this.feedDayMinute();
@@ -221,14 +239,18 @@ export class AppComponent {
     this.agencyFilter.set('');
     this.routeTypeFilter.set('');
     this.activeTripsOnly.set(false);
+    this.expandedRouteShortNames.set(new Set());
     this.selectedId.set(undefined);
     if (view === 'timeline') this.positionTimelineAtFeedTime();
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
   protected updateSearch(event: Event): void { this.searchTerm.set((event.target as HTMLInputElement).value); }
   protected updateAgency(event: Event): void {
-    this.agencyFilter.set((event.target as HTMLSelectElement).value);
-    this.selectedId.set(this.timeline().rows[0]?.item.id);
+    const agency = (event.target as HTMLSelectElement).value;
+    this.agencyFilter.set(agency);
+    const firstGroup = this.timelineGroups()[0];
+    this.expandedRouteShortNames.set(agency && firstGroup ? new Set([firstGroup.name]) : new Set());
+    this.selectedId.set(firstGroup?.rows[0]?.item.id ?? this.timeline().rows[0]?.item.id);
   }
   protected updateRouteType(event: Event): void {
     this.routeTypeFilter.set((event.target as HTMLSelectElement).value);
@@ -244,6 +266,20 @@ export class AppComponent {
   protected updateActiveTripsOnly(event: Event): void {
     this.activeTripsOnly.set((event.target as HTMLInputElement).checked);
     this.selectedId.set(this.timeline().rows[0]?.item.id);
+  }
+  protected toggleRouteShortName(name: string): void {
+    this.expandedRouteShortNames.update((current) => {
+      const expanded = new Set(current);
+      if (expanded.has(name)) expanded.delete(name);
+      else expanded.add(name);
+      return expanded;
+    });
+  }
+  protected expandAllRouteShortNames(): void {
+    this.expandedRouteShortNames.set(new Set(this.timelineGroups().map((group) => group.name)));
+  }
+  protected collapseAllRouteShortNames(): void {
+    this.expandedRouteShortNames.set(new Set());
   }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
 
