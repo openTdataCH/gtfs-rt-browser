@@ -7,7 +7,7 @@ import {
   StopTimeUpdateDto, TripScheduleRelationship, TripUpdateDto
 } from '../dto';
 import {
-  AgencyJSON, GtfsDbLookupAgency, GtfsDbLookupRoutes, GtfsStaticDbCatalogItemJSON,
+  AgencyJSON, GtfsDbLookupAgency, GtfsDbLookupRoutes, GtfsDbLookupStops, GtfsStaticDbCatalogItemJSON,
   GtfsStaticDbCatalogJSON, GtfsDayTripTimelineResponse,
   GtfsDayTripTimelineRow, RouteJSON
 } from '../../gtfs-static/dto';
@@ -55,6 +55,9 @@ async function parseFeed(url: string): Promise<void> {
       tripUpdateCount: tripEntities.length
     };
     postMessage({ type: 'metadata', metadata });
+    const stopsLookupPromise = fetchGtfsStopsLookup(gtfsDay)
+      .then((stops) => ({ stops }))
+      .catch((error: unknown) => ({ error }));
 
     const [agencyLookup, routesLookup] = await Promise.all([
       fetchGtfsLookup(APP_URLS.gtfsAgencyLookup, gtfsDay, 'agency'),
@@ -84,6 +87,18 @@ async function parseFeed(url: string): Promise<void> {
       await new Promise<void>((resolve) => setTimeout(resolve));
     }
     postMessage({ type: 'complete', count: tripEntities.length });
+    const stopsResult = await stopsLookupPromise;
+    if ('stops' in stopsResult) {
+      const stopsById = new Map(stopsResult.stops.rows.map((stop) => [stop.stop_id, stop]));
+      postMessage({ type: 'stops-lookup', stopsById });
+    } else {
+      const error = stopsResult.error;
+      postMessage({
+        type: 'stops-error',
+        message: error instanceof Error ? error.message : 'Unknown GTFS stops lookup error.'
+      });
+    }
+    postMessage({ type: 'worker-done' });
   } catch (error: unknown) {
     postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown GTFS-RT parsing error.' });
   }
@@ -314,6 +329,20 @@ async function fetchGtfsLookup(
   return json as GtfsDbLookupAgency | GtfsDbLookupRoutes;
 }
 
+async function fetchGtfsStopsLookup(gtfsDay: string): Promise<GtfsDbLookupStops> {
+  const url = new URL(APP_URLS.gtfsStopsLookup);
+  url.searchParams.set('gtfs_day', gtfsDay);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`GTFS stops lookup request failed: ${response.status} ${response.statusText}`);
+  }
+  const json: unknown = await response.json();
+  if (!isLookup(json, 'stops')) {
+    throw new Error('GTFS stops lookup response does not match the expected structure.');
+  }
+  return json as GtfsDbLookupStops;
+}
+
 function isLookup(value: unknown, name: string): boolean {
   return isRecord(value)
     && value['lookup_name'] === name
@@ -497,6 +526,7 @@ function toTripUpdateDto(entity: transit_realtime.FeedEntity, lookups: LookupInd
     agency,
     route,
     businessOrganisation,
+    staticTripAvailable: timeline !== undefined,
     timeline: timelineResult.timeline,
     timelineError: timelineResult.error
   };
