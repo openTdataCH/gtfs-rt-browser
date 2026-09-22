@@ -183,7 +183,7 @@
 
         <aside class="detail-pane flex-grow-1 overflow-auto bg-white p-4" aria-label="Selected trip update">
           @if (selected(); as item) {
-            <div class="d-flex align-items-start gap-3 mb-4">
+            <div class="d-flex align-items-center gap-3 mb-4">
               <span class="route-badge route-badge-large"
                 [class.route-badge-scheduled]="item.relationship === 'SCHEDULED'"
                 [class.route-badge-cancelled]="item.relationship === 'CANCELED'"
@@ -191,6 +191,16 @@
               <div><h2 class="h4 mb-1">Trip {{ item.tripId }}</h2></div>
             </div>
             <dl class="detail-grid">
+              @if (item.dto.trip.originalTripId; as originalTripId) {
+                <dt>GTFS-RT originalTripId</dt>
+                <dd class="font-monospace">
+                  {{ originalTripId }}
+                  @if (ojpTripUrl(originalTripId); as url) {
+                    <a class="ms-1 text-decoration-none" [href]="url" target="_blank" rel="noopener noreferrer"
+                      title="Open trip in OJP demo app" aria-label="Open trip in OJP demo app">↗</a>
+                  }
+                </dd>
+              }
               <dt>Agency</dt>
               <dd>
                 {{ agencyDetailLabel(item) }} <span class="text-secondary">({{ item.agencyId }})</span>

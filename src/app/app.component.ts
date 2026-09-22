@@ -394,6 +394,12 @@ export class AppComponent {
     return `${APP_URLS.gtfsChRoutes}?route=${encodeURIComponent(item.routeId)}`;
   }
 
+  protected ojpTripUrl(originalTripId: string): string | undefined {
+    return originalTripId.startsWith('ch:1:sjyid:')
+      ? `https://opentdatach.github.io/ojp-demo-app/trip?ref=${encodeURIComponent(originalTripId)}`
+      : undefined;
+  }
+
   protected atlasBusinessOrganisationUrl(item: TripUpdate): string {
     const sboid = item.dto.businessOrganisation?.sboid ?? '';
     return `${APP_URLS.atlasBusinessOrganisations}/${encodeURIComponent(sboid)}`;
