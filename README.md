@@ -1,8 +1,9 @@
 # GTFS-RT Browser
 
-Angular browser for inspecting large GTFS-Realtime protobuf feeds. The initial
-slice focuses on `TripUpdate` messages and mirrors the master/detail layout of
-the SIRI-SX browser.
+Browse and inspect GTFS-Realtime `TripUpdate` messages on an interactive timeline.
+Search and filter trips by agency, route, relationship, and stop; compare updates
+with GTFS static schedules, inspect stop times and delays, and open related OJP
+requests. The app decodes large protobuf feeds in a worker to keep the UI responsive.
 
 ## Run
 
@@ -17,4 +18,3 @@ npm start
 - `models/` adds derived delay, status, search, and date behavior.
 - `gtfs-rt-parser.worker.ts` decodes protobuf off the UI thread and emits
   `TripUpdate` DTOs in batches of 250.
-- The UI uses Angular CDK virtual scrolling for the 10k+ message list.
