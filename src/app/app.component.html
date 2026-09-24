@@ -16,9 +16,9 @@
       }
     </div>
     @if (parseState().status === 'loading') {
-      <span class="small"><span class="spinner-border spinner-border-sm me-2"></span>{{ parseState().processed }} processed</span>
+      <span class="small"><span class="spinner-border spinner-border-sm me-2"></span>{{ parseState().processed | number }} processed</span>
     } @else if (parseState().status === 'complete') {
-      <span class="small">{{ parseState().count }} parsed in {{ parseState().elapsedMs / 1000 | number:'1.1-1' }}s</span>
+      <span class="small">{{ parseState().count | number }} parsed in {{ parseState().elapsedMs / 1000 | number:'1.1-1' }}s</span>
     }
     <button type="button" class="btn btn-light btn-sm" [disabled]="parseState().status === 'loading'" (click)="parseFeed()">Reload</button>
   </header>
@@ -30,13 +30,13 @@
           [class.btn-primary]="activeView() === 'timeline'"
           [class.btn-outline-primary]="activeView() !== 'timeline'"
           (click)="selectView('timeline')">
-          Timeline <span class="badge text-bg-light ms-1">{{ timelineItems().length }}</span>
+          Timeline <span class="badge text-bg-light ms-1">{{ timelineItems().length | number }}</span>
         </button>
         <button type="button" class="btn"
           [class.btn-danger]="activeView() === 'errors'"
           [class.btn-outline-danger]="activeView() !== 'errors'"
           (click)="selectView('errors')">
-          Errors <span class="badge text-bg-light ms-1">{{ errorItems().length }}</span>
+          Errors <span class="badge text-bg-light ms-1">{{ errorItems().length | number }}</span>
         </button>
       </div>
       <button type="button" class="btn btn-outline-secondary btn-sm d-md-none ms-auto" (click)="toggleFilters()">
@@ -47,9 +47,9 @@
         @if (activeView() === 'timeline') {
           <div class="agency-filter input-group input-group-sm">
             <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
-              <option value="">All agencies ({{ agencyOptions().length }})</option>
+              <option value="">All agencies ({{ agencyOptions().length | number }})</option>
               @for (agency of agencyOptions(); track agency.id) {
-                <option [value]="agency.id">{{ agency.name }} ({{ agency.count }})</option>
+                <option [value]="agency.id">{{ agency.name }} ({{ agency.count | number }})</option>
               }
             </select>
             <button type="button" class="btn btn-outline-secondary agency-sort-button" (click)="toggleAgencySort()"
@@ -59,9 +59,9 @@
             </button>
           </div>
           <select class="form-select form-select-sm route-type-select" [value]="routeTypeFilter()" (change)="updateRouteType($event)">
-            <option value="">All route types ({{ routeTypeOptions().length }})</option>
+            <option value="">All route types ({{ routeTypeOptions().length | number }})</option>
             @for (routeType of routeTypeOptions(); track routeType.id) {
-              <option [value]="routeType.id">{{ routeType.name }} ({{ routeType.count }})</option>
+              <option [value]="routeType.id">{{ routeType.name }} ({{ routeType.count | number }})</option>
             }
           </select>
           <div class="form-check ms-1">
@@ -73,7 +73,7 @@
         }
         <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
           <option value="">All relationships</option>
-          @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count }})</option> }
+          @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count | number }})</option> }
         </select>
       </div>
       @if (parseState().status === 'error') { <span class="text-danger small">{{ parseState().message }}</span> }
@@ -89,24 +89,45 @@
         @if (activeView() === 'timeline') {
         <section class="timeline-pane d-flex flex-column flex-grow-1 overflow-hidden" aria-label="Trip timeline">
           <div class="timeline-summary small text-secondary border-bottom bg-white px-3 py-2">
-            <strong class="timeline-count">
-              {{ timeline().rows.length }}@if (timeline().rows.length !== timelineItems().length) {<span class="timeline-count-total"> / {{ timelineItems().length }}</span>}
-              <span>trips</span>
-            </strong>
+            <div class="timeline-summary-main">
+              <section class="timeline-summary-section timeline-now-section" aria-label="Timeline time">
+                <label class="timeline-section-heading" for="timeline-now-time">Now</label>
+                <div class="timeline-now-control d-flex align-items-center gap-1">
+                  <input id="timeline-now-time" type="time" class="form-control form-control-sm timeline-now-input"
+                    [value]="nowTime()" (input)="updateNowTime($event)">
+                  <div class="btn-group-vertical" role="group" aria-label="Adjust now time">
+                    <button type="button" class="btn btn-outline-secondary timeline-now-step" title="1 minute later"
+                      aria-label="1 minute later" (click)="adjustNowTime(1)">▲</button>
+                    <button type="button" class="btn btn-outline-secondary timeline-now-step" title="1 minute earlier"
+                      aria-label="1 minute earlier" (click)="adjustNowTime(-1)">▼</button>
+                  </div>
+                </div>
+              </section>
+              <section class="timeline-summary-section" aria-label="GTFS-RT message counts">
+                <span class="timeline-section-heading">GTFS-RT <span class="timeline-section-total">Total {{ metadata()!.tripUpdateCount | number }}</span></span>
+                <div class="timeline-section-values">
+                  <strong class="timeline-count">{{ filteredItems().length | number }}</strong>
+                  <span class="timeline-metric"><span>Active</span>
+                    <strong>@if (activeTripCount() !== undefined) { {{ activeTripCount() | number }} } @else { — }</strong></span>
+                </div>
+              </section>
+              <section class="timeline-summary-section" aria-label="GTFS-S day trip counts">
+                <span class="timeline-section-heading">GTFS-S
+                  @if (staticTripTotal() === undefined && timelineStatus() === 'loading') {
+                    <span class="spinner-border spinner-border-sm ms-1" role="status" aria-label="Loading GTFS-S trips"></span>
+                  }
+                  <span class="timeline-section-total">Total @if (staticTripTotal() !== undefined) { {{ staticTripTotal() | number }} } @else { — }</span>
+                </span>
+                <div class="timeline-section-values">
+                  <strong class="timeline-count timeline-count-static">@if (staticTripFiltered() !== undefined) { {{ staticTripFiltered() | number }} } @else { — }</strong>
+                  <span class="timeline-metric"><span>Active</span>
+                    <strong>@if (staticTripActive() !== undefined) { {{ staticTripActive() | number }} } @else { — }</strong></span>
+                </div>
+              </section>
+            </div>
             @if (timelineStatus() === 'error') {
               <span class="text-danger" role="status">Trip timelines unavailable: {{ timelineError() }}</span>
             }
-            <div class="timeline-now-control d-flex align-items-center gap-1">
-              <label for="timeline-now-time">Now</label>
-              <input id="timeline-now-time" type="time" class="form-control form-control-sm timeline-now-input"
-                [value]="nowTime()" (input)="updateNowTime($event)">
-              <div class="btn-group-vertical" role="group" aria-label="Adjust now time">
-                <button type="button" class="btn btn-outline-secondary timeline-now-step" title="1 minute later"
-                  aria-label="1 minute later" (click)="adjustNowTime(1)">▲</button>
-                <button type="button" class="btn btn-outline-secondary timeline-now-step" title="1 minute earlier"
-                  aria-label="1 minute earlier" (click)="adjustNowTime(-1)">▼</button>
-              </div>
-            </div>
             <div class="timeline-group-controls ms-auto">
               <span class="form-check mb-0">
                 <input id="group-route-short-name" type="checkbox" class="form-check-input"
@@ -151,14 +172,14 @@
                     <span class="timeline-row-index" aria-hidden="true"></span>
                     <span class="group-chevron">{{ expandedRouteShortNames().has(group.name) ? '▾' : '▸' }}</span>
                     <strong>{{ group.name }}</strong>
-                    <span class="badge text-bg-secondary ms-2">{{ group.rows.length }}</span>
+                    <span class="badge text-bg-secondary ms-2">{{ group.rows.length | number }}</span>
                   </button>
                   <div class="timeline-group-track border-bottom" [style.width.px]="timeline().width"></div>
                   @if (expandedRouteShortNames().has(group.name)) {
                     @for (row of group.rows; track row.item.id) {
                       <button type="button" class="timeline-label timeline-label-child border-0 border-end border-bottom bg-white text-start"
                         [class.selected]="selectedId() === row.item.id" (click)="select(row.item)">
-                        <span class="timeline-row-index">{{ row.index }}</span>
+                        <span class="timeline-row-index">{{ row.index | number }}</span>
                         <span class="timeline-trip-info">
                           <strong>{{ row.item.tripId }}</strong>
                           <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
@@ -180,7 +201,7 @@
                 @for (row of timeline().rows; track row.item.id) {
                   <button type="button" class="timeline-label border-0 border-end border-bottom bg-white text-start"
                     [class.selected]="selectedId() === row.item.id" (click)="select(row.item)">
-                    <span class="timeline-row-index">{{ row.index }}</span>
+                    <span class="timeline-row-index">{{ row.index | number }}</span>
                     <span class="timeline-trip-info">
                       <strong>{{ row.item.tripId }}</strong>
                       <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
@@ -216,8 +237,8 @@
         } @else {
         <section class="list-pane d-flex flex-column border-end" aria-label="Timeline errors">
           <div class="small text-secondary border-bottom bg-white px-3 py-2">
-            {{ filteredItems().length }} of {{ viewItems().length }} timeline errors
-            @if (metadata(); as feed) { · {{ feed.entityCount }} total feed entities }
+            {{ filteredItems().length | number }} of {{ viewItems().length | number }} timeline errors
+            @if (metadata(); as feed) { · {{ feed.entityCount | number }} total feed entities }
           </div>
           <cdk-virtual-scroll-viewport class="message-viewport flex-grow-1" [itemSize]="92" [minBufferPx]="552" [maxBufferPx]="1104">
             <button *cdkVirtualFor="let item of filteredItems(); trackBy: trackById" type="button"
@@ -299,7 +320,7 @@
             <div class="mt-4">
               <div class="d-flex align-items-center mb-2">
                 <h3 class="h6 mb-0">Stop times</h3>
-                <span class="badge text-bg-secondary ms-2">{{ stopTableRows().length }}</span>
+                <span class="badge text-bg-secondary ms-2">{{ stopTableRows().length | number }}</span>
                 @if (staticTripState().status === 'loading') {
                   <span class="spinner-border spinner-border-sm text-secondary ms-2" title="Loading GTFS static stop times"></span>
                 }
@@ -318,7 +339,7 @@
                   <tbody>
                     @for (stop of stopTableRows(); track stop.key) {
                       <tr [class.table-warning]="stop.isSkipped">
-                        <td>{{ stop.sequence ?? '—' }}</td>
+                        <td>{{ stop.sequence === undefined ? '—' : (stop.sequence | number) }}</td>
                         <td>
                           @if (stop.name) { <div>{{ stop.name }}</div> }
                           <div class="font-monospace" [class.small]="stop.name" [class.text-secondary]="stop.name">{{ stop.stopId }}</div>
