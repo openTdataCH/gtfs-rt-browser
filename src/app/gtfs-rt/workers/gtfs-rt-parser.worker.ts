@@ -121,27 +121,33 @@ async function fetchTripTimelines(
   url.searchParams.set('gtfs_day', gtfsDay);
   url.searchParams.set('day', feedDay);
   url.searchParams.set('fields_profile', 'query_day_trips_timeline');
+  url.searchParams.set('row_format', 'array');
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`GTFS day-trip timeline request failed: ${response.status} ${response.statusText}`);
   }
   const json: unknown = await response.json();
-  if (!isGtfsDayTripTimelineResponse(json)) {
+  const rows = isRecord(json) ? json['rows'] : json;
+  if (!isGtfsDayTripTimelineRows(rows)) {
     throw new Error('GTFS day-trip timeline response does not contain valid timeline rows.');
   }
+  const tripTimelines: GtfsDayTripTimelineResponse = {
+    rows: rows.map(([trip_id, departure_day_minutes, arrival_day_minutes]) => ({
+      trip_id, departure_day_minutes, arrival_day_minutes
+    }))
+  };
   console.info('GTFS day-trip timelines parsed.', {
-    gtfsDay, feedDay, trips: json.rows.length
+    gtfsDay, feedDay, trips: tripTimelines.rows.length
   });
-  return json;
+  return tripTimelines;
 }
 
-function isGtfsDayTripTimelineResponse(value: unknown): value is GtfsDayTripTimelineResponse {
-  return isRecord(value)
-    && Array.isArray(value['rows'])
-    && value['rows'].every((row) => isRecord(row)
-      && typeof row['trip_id'] === 'string'
-      && Number.isInteger(row['departure_day_minutes'])
-      && Number.isInteger(row['arrival_day_minutes']));
+function isGtfsDayTripTimelineRows(value: unknown): value is [string, number, number, ...unknown[]][] {
+  return Array.isArray(value)
+    && value.every((row) => Array.isArray(row) && row.length >= 3
+      && typeof row[0] === 'string'
+      && Number.isInteger(row[1])
+      && Number.isInteger(row[2]));
 }
 
 async function fetchBusinessOrganisations(): Promise<ReadonlyMap<string, BusinessOrganisationDto>> {
