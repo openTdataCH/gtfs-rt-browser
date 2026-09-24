@@ -8,6 +8,7 @@ export type GtfsRtStreamEvent =
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: readonly TripUpdate[]; processed: number }
   | { type: 'trip-timelines'; updates: readonly TripTimelineUpdateDto[] }
+  | { type: 'static-agency-trip-counts'; countsByAgency: ReadonlyMap<string, number> }
   | { type: 'trip-timelines-error'; message: string }
   | { type: 'complete'; count: number }
   | { type: 'stops-lookup'; stopsById: ReadonlyMap<string, StopJSON> }
@@ -17,6 +18,7 @@ type WorkerResponse =
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: TripUpdateDto[]; processed: number }
   | { type: 'trip-timelines'; updates: TripTimelineUpdateDto[] }
+  | { type: 'static-agency-trip-counts'; countsByAgency: Map<string, number> }
   | { type: 'trip-timelines-error'; message: string }
   | { type: 'complete'; count: number }
   | { type: 'stops-lookup'; stopsById: Map<string, StopJSON> }

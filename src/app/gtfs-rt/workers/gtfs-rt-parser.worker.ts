@@ -98,6 +98,16 @@ async function parseFeed(url: string): Promise<void> {
     postMessage({ type: 'complete', count: tripEntities.length });
     const timelineResult = await tripTimelinesPromise;
     if ('timelines' in timelineResult) {
+      const agencyByRouteRowid = new Map(routesLookup.rows.map((route) => [route.rowid, route.agency_id]));
+      const staticTripCountsByAgency = new Map<string, number>();
+      for (const trip of timelineResult.timelines.rows) {
+        const agencyId = agencyByRouteRowid.get(trip.route_rowid);
+        if (agencyId === undefined) {
+          throw new Error(`GTFS day trip ${trip.trip_id} references unknown route rowid ${trip.route_rowid}.`);
+        }
+        staticTripCountsByAgency.set(agencyId, (staticTripCountsByAgency.get(agencyId) ?? 0) + 1);
+      }
+      postMessage({ type: 'static-agency-trip-counts', countsByAgency: staticTripCountsByAgency });
       const timelineLookups: LookupIndex = {
         ...lookupIndex,
         tripTimelines: new Map(timelineResult.timelines.rows.map((trip) => [trip.trip_id, trip]))
@@ -145,8 +155,8 @@ async function fetchTripTimelines(
     throw new Error('GTFS day-trip timeline response does not contain valid timeline rows.');
   }
   const tripTimelines: GtfsDayTripTimelineResponse = {
-    rows: rows.map(([trip_id, departure_day_minutes, arrival_day_minutes]) => ({
-      trip_id, departure_day_minutes, arrival_day_minutes
+    rows: rows.map(([trip_id, departure_day_minutes, arrival_day_minutes, route_rowid]) => ({
+      trip_id, departure_day_minutes, arrival_day_minutes, route_rowid
     }))
   };
   console.info('GTFS day-trip timelines parsed.', {
@@ -155,12 +165,13 @@ async function fetchTripTimelines(
   return tripTimelines;
 }
 
-function isGtfsDayTripTimelineRows(value: unknown): value is [string, number, number, ...unknown[]][] {
+function isGtfsDayTripTimelineRows(value: unknown): value is [string, number, number, number][] {
   return Array.isArray(value)
-    && value.every((row) => Array.isArray(row) && row.length >= 3
+    && value.every((row) => Array.isArray(row) && row.length >= 4
       && typeof row[0] === 'string'
       && Number.isInteger(row[1])
-      && Number.isInteger(row[2]));
+      && Number.isInteger(row[2])
+      && Number.isInteger(row[3]));
 }
 
 async function fetchBusinessOrganisations(): Promise<ReadonlyMap<string, BusinessOrganisationDto>> {

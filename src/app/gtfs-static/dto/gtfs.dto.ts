@@ -40,6 +40,7 @@ export interface CalendarJSON {
 }
 
 export interface RouteJSON {
+  rowid: number;
   route_id: string;
   agency_id: string;
   route_short_name: string;
@@ -126,6 +127,7 @@ export interface GtfsDayTripTimelineRow {
   trip_id: string;
   departure_day_minutes: number;
   arrival_day_minutes: number;
+  route_rowid: number;
 }
 
 export interface GtfsDayTripTimelineResponse {

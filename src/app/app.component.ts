@@ -96,6 +96,7 @@ export class AppComponent {
   protected readonly items = signal<readonly TripUpdate[]>([]);
   protected readonly timelineStatus = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly timelineError = signal<string | undefined>(undefined);
+  protected readonly staticTripCountsByAgency = signal<ReadonlyMap<string, number>>(new Map());
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
@@ -343,6 +344,7 @@ export class AppComponent {
     this.feedSubscription?.unsubscribe();
     this.items.set([]); this.selectedId.set(undefined); this.metadata.set(undefined);
     this.timelineStatus.set('loading'); this.timelineError.set(undefined);
+    this.staticTripCountsByAgency.set(new Map());
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
@@ -369,6 +371,9 @@ export class AppComponent {
             return update ? new TripUpdate({ ...item.dto, ...update }) : item;
           }));
           this.timelineStatus.set('ready');
+        }
+        if (event.type === 'static-agency-trip-counts') {
+          this.staticTripCountsByAgency.set(event.countsByAgency);
         }
         if (event.type === 'trip-timelines-error') {
           this.timelineError.set(event.message);
