@@ -104,7 +104,7 @@ export class AppComponent {
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal(new URLSearchParams(window.location.search).get('q') ?? '');
   protected readonly agencyFilter = signal('');
-  protected readonly agencySort = signal<'name' | 'count'>('name');
+  protected readonly agencySort = signal<'name' | 'count'>('count');
   protected readonly routeTypeFilter = signal('');
   protected readonly relationshipFilter = signal('');
   protected readonly activeTripsOnly = signal(false);
@@ -472,8 +472,8 @@ export class AppComponent {
     else url.searchParams.delete('q');
     window.history.replaceState(window.history.state, '', url);
   }
-  protected toggleAgencySort(): void {
-    this.agencySort.update((sort) => sort === 'name' ? 'count' : 'name');
+  protected setAgencySort(sort: 'name' | 'count'): void {
+    this.agencySort.set(sort);
   }
   protected updateAgency(event: Event): void {
     this.applyAgencyFilter((event.target as HTMLSelectElement).value);

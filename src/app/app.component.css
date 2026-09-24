@@ -13,7 +13,7 @@
 .toolbar { flex: 0 0 auto; }
 .filter-controls { display: contents; }
 .search-input { width: min(30rem, 42vw); }
-.agency-filter { width: 19rem; }
+.agency-filter { width: 23rem; }
 .agency-select { min-width: 0; }
 .agency-sort-button { white-space: nowrap; }
 .route-type-select { width: 16rem; }
