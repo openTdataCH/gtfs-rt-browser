@@ -30,7 +30,7 @@
           [class.btn-primary]="activeView() === 'timeline'"
           [class.btn-outline-primary]="activeView() !== 'timeline'"
           (click)="selectView('timeline')">
-          Timeline <span class="badge text-bg-light ms-1">{{ timelineItems().length | number }}</span>
+          Timeline
         </button>
         <button type="button" class="btn"
           [class.btn-danger]="activeView() === 'errors'"
@@ -104,24 +104,34 @@
                 </div>
               </section>
               <section class="timeline-summary-section" aria-label="GTFS-RT message counts">
-                <span class="timeline-section-heading">GTFS-RT <span class="timeline-section-total">Total {{ metadata()!.tripUpdateCount | number }}</span></span>
-                <div class="timeline-section-values">
-                  <strong class="timeline-count">{{ filteredItems().length | number }}</strong>
-                  <span class="timeline-metric"><span>Active</span>
-                    <strong>@if (activeTripCount() !== undefined) { {{ activeTripCount() | number }} } @else { — }</strong></span>
+                <span class="timeline-section-heading">GTFS-RT messages</span>
+                <div class="timeline-stat-grid">
+                  <span class="timeline-stat-label">All</span>
+                  <span class="timeline-stat-values">
+                    <strong>@if (activeTripCount() !== undefined) { {{ activeTripCount() | number }} } @else { — }</strong> active now
+                    <span aria-hidden="true">/</span> <strong>{{ metadata()!.tripUpdateCount | number }}</strong> total
+                  </span>
+                  <span class="timeline-stat-label">Selection</span>
+                  <strong class="timeline-count">{{ filteredItems().length | number }} matching</strong>
                 </div>
               </section>
               <section class="timeline-summary-section" aria-label="GTFS-S day trip counts">
-                <span class="timeline-section-heading">GTFS-S
+                <span class="timeline-section-heading">GTFS-S day trips
                   @if (staticTripTotal() === undefined && timelineStatus() === 'loading') {
                     <span class="spinner-border spinner-border-sm ms-1" role="status" aria-label="Loading GTFS-S trips"></span>
                   }
-                  <span class="timeline-section-total">Total @if (staticTripTotal() !== undefined) { {{ staticTripTotal() | number }} } @else { — }</span>
                 </span>
-                <div class="timeline-section-values">
-                  <strong class="timeline-count timeline-count-static">@if (staticTripFiltered() !== undefined) { {{ staticTripFiltered() | number }} } @else { — }</strong>
-                  <span class="timeline-metric"><span>Active</span>
-                    <strong>@if (staticTripActive() !== undefined) { {{ staticTripActive() | number }} } @else { — }</strong></span>
+                <div class="timeline-stat-grid">
+                  <span class="timeline-stat-label">All</span>
+                  <span class="timeline-stat-values">
+                    <strong>@if (staticTripActive() !== undefined) { {{ staticTripActive() | number }} } @else { — }</strong> active now
+                    <span aria-hidden="true">/</span>
+                    <strong>@if (staticTripTotal() !== undefined) { {{ staticTripTotal() | number }} } @else { — }</strong> total
+                  </span>
+                  <span class="timeline-stat-label" title="GTFS-S selection follows agency and Active trips only; search, route type and relationship do not apply">
+                    {{ staticSelectionLabel() }}
+                  </span>
+                  <strong class="timeline-count timeline-count-static">@if (staticTripFiltered() !== undefined) { {{ staticTripFiltered() | number }} } @else { — } trips</strong>
                 </div>
               </section>
             </div>

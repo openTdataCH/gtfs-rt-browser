@@ -37,8 +37,10 @@
 .timeline-summary-section:first-child { padding-left: 0; }
 .timeline-summary-section + .timeline-summary-section { border-left: 1px solid #dee2e6; }
 .timeline-section-heading { color: #526477; font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-.timeline-section-total { margin-left: .75rem; color: #6c757d; font-weight: 600; letter-spacing: normal; text-transform: none; white-space: nowrap; }
-.timeline-section-values { display: flex; align-items: center; gap: .75rem; }
+.timeline-stat-grid { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: .3rem .75rem; }
+.timeline-stat-label { color: #6c757d; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.timeline-stat-values { display: inline-flex; align-items: baseline; gap: .25rem; white-space: nowrap; }
+.timeline-stat-values strong { color: #212529; font-variant-numeric: tabular-nums; }
 .timeline-now-control { color: #495057; font-size: .8rem; font-weight: 600; white-space: nowrap; }
 .timeline-now-input { width: 8rem; }
 .timeline-now-step { padding: 0 .35rem; font-size: .55rem; line-height: .9rem; }
@@ -50,8 +52,6 @@
   border: 1px solid #9ec5fe; border-radius: .45rem; background: #e9f2ff;
   color: #0a58ca; font-size: 1rem; font-weight: 700; white-space: nowrap;
 }
-.timeline-metric { display: flex; flex-direction: column; min-width: 4.5rem; color: #6c757d; line-height: 1.2; white-space: nowrap; }
-.timeline-metric strong { color: #212529; font-size: .95rem; font-variant-numeric: tabular-nums; }
 .timeline-count-static { border-color: #dee2e6; background: #f8f9fa; color: #495057; }
 .timeline-table {
   position: relative; display: grid; grid-template-columns: 20rem var(--timeline-width);

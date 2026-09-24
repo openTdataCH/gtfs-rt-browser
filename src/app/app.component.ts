@@ -152,6 +152,13 @@ export class AppComponent {
     }
     return selectedAgency ? this.staticTripCountsByAgency().get(selectedAgency) ?? 0 : total;
   });
+  protected readonly staticSelectionLabel = computed(() => {
+    const agencyId = this.agencyFilter();
+    const agencyName = agencyId
+      ? this.timelineItems().find((item) => item.agencyId === agencyId)?.agencyName ?? agencyId
+      : 'All agencies';
+    return this.activeTripsOnly() ? `${agencyName} · active` : agencyName;
+  });
   protected readonly errorItems = computed(() => this.timelineStatus() !== 'ready' ? [] : this.items().filter((item) =>
     item.dto.timeline === undefined || item.dto.timelineError !== undefined));
   protected readonly viewItems = computed(() =>
