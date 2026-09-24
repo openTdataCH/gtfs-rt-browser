@@ -100,14 +100,21 @@ async function parseFeed(url: string): Promise<void> {
     if ('timelines' in timelineResult) {
       const agencyByRouteRowid = new Map(routesLookup.rows.map((route) => [route.rowid, route.agency_id]));
       const staticTripCountsByAgency = new Map<string, number>();
+      const timeRangesByAgency = new Map<string, number[]>();
       for (const trip of timelineResult.timelines.rows) {
         const agencyId = agencyByRouteRowid.get(trip.route_rowid);
         if (agencyId === undefined) {
           throw new Error(`GTFS day trip ${trip.trip_id} references unknown route rowid ${trip.route_rowid}.`);
         }
         staticTripCountsByAgency.set(agencyId, (staticTripCountsByAgency.get(agencyId) ?? 0) + 1);
+        let timeRanges = timeRangesByAgency.get(agencyId);
+        if (!timeRanges) {
+          timeRanges = [];
+          timeRangesByAgency.set(agencyId, timeRanges);
+        }
+        timeRanges.push(trip.departure_day_minutes, trip.arrival_day_minutes);
       }
-      postMessage({ type: 'static-agency-trip-counts', countsByAgency: staticTripCountsByAgency });
+      postMessage({ type: 'static-agency-trip-counts', countsByAgency: staticTripCountsByAgency, timeRangesByAgency });
       const timelineLookups: LookupIndex = {
         ...lookupIndex,
         tripTimelines: new Map(timelineResult.timelines.rows.map((trip) => [trip.trip_id, trip]))
