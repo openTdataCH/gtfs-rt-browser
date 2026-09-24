@@ -97,6 +97,7 @@ export class AppComponent {
   protected readonly timelineStatus = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly timelineError = signal<string | undefined>(undefined);
   protected readonly staticTripCountsByAgency = signal<ReadonlyMap<string, number>>(new Map());
+  protected readonly staticTripTimeRangesByAgency = signal<ReadonlyMap<string, readonly number[]>>(new Map());
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
@@ -113,6 +114,44 @@ export class AppComponent {
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
   protected readonly timelineItems = computed(() => this.items());
+  protected readonly activeTripCount = computed(() => this.timelineStatus() === 'ready'
+    ? this.timelineItems().filter((item) => this.isActiveAtNow(item)).length
+    : undefined);
+  protected readonly staticTripTotal = computed(() => {
+    const countsByAgency = this.staticTripCountsByAgency();
+    if (!countsByAgency.size) return undefined;
+    return [...countsByAgency.values()].reduce((total, count) => total + count, 0);
+  });
+  protected readonly staticActiveTripsByAgency = computed(() => {
+    const timeRangesByAgency = this.staticTripTimeRangesByAgency();
+    if (!timeRangesByAgency.size) return undefined;
+    const now = this.nowDayMinute();
+    const activeByAgency = new Map<string, number>();
+    for (const [agencyId, timeRanges] of timeRangesByAgency) {
+      let active = 0;
+      for (let index = 0; index < timeRanges.length; index += 2) {
+        if (timeRanges[index] <= now && now <= timeRanges[index + 1]) active++;
+      }
+      activeByAgency.set(agencyId, active);
+    }
+    return activeByAgency;
+  });
+  protected readonly staticTripActive = computed(() => {
+    const activeByAgency = this.staticActiveTripsByAgency();
+    return activeByAgency === undefined ? undefined
+      : [...activeByAgency.values()].reduce((total, count) => total + count, 0);
+  });
+  protected readonly staticTripFiltered = computed(() => {
+    const total = this.staticTripTotal();
+    if (total === undefined) return undefined;
+    const selectedAgency = this.agencyFilter();
+    if (this.activeTripsOnly()) {
+      const activeByAgency = this.staticActiveTripsByAgency();
+      if (!activeByAgency) return undefined;
+      return selectedAgency ? activeByAgency.get(selectedAgency) ?? 0 : this.staticTripActive();
+    }
+    return selectedAgency ? this.staticTripCountsByAgency().get(selectedAgency) ?? 0 : total;
+  });
   protected readonly errorItems = computed(() => this.timelineStatus() !== 'ready' ? [] : this.items().filter((item) =>
     item.dto.timeline === undefined || item.dto.timelineError !== undefined));
   protected readonly viewItems = computed(() =>
@@ -345,6 +384,7 @@ export class AppComponent {
     this.items.set([]); this.selectedId.set(undefined); this.metadata.set(undefined);
     this.timelineStatus.set('loading'); this.timelineError.set(undefined);
     this.staticTripCountsByAgency.set(new Map());
+    this.staticTripTimeRangesByAgency.set(new Map());
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
@@ -374,6 +414,7 @@ export class AppComponent {
         }
         if (event.type === 'static-agency-trip-counts') {
           this.staticTripCountsByAgency.set(event.countsByAgency);
+          this.staticTripTimeRangesByAgency.set(event.timeRangesByAgency);
         }
         if (event.type === 'trip-timelines-error') {
           this.timelineError.set(event.message);
