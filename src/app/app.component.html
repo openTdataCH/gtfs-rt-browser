@@ -2,6 +2,22 @@
   <header class="app-header d-flex align-items-center gap-3 px-4 py-3">
     <h1 class="h5 mb-0">{{ title }}</h1>
     <span class="badge text-bg-light">TripUpdates</span>
+    <div class="header-view-switch btn-group btn-group-sm" role="group" aria-label="Trip update views">
+      <button type="button" class="btn"
+        [class.btn-light]="activeView() === 'timeline'"
+        [class.btn-outline-light]="activeView() !== 'timeline'"
+        [attr.aria-pressed]="activeView() === 'timeline'"
+        (click)="selectView('timeline')">
+        Timeline
+      </button>
+      <button type="button" class="btn"
+        [class.btn-danger]="activeView() === 'errors'"
+        [class.btn-outline-light]="activeView() !== 'errors'"
+        [attr.aria-pressed]="activeView() === 'errors'"
+        (click)="selectView('errors')">
+        Errors <span class="badge text-bg-light ms-1">{{ errorItems().length | number }}</span>
+      </button>
+    </div>
     <div class="header-metadata d-flex align-items-center gap-2 me-auto">
       <span class="metadata-pill">
         <span class="metadata-label">GTFS feed</span>
@@ -24,61 +40,9 @@
   </header>
 
   <main class="app-content d-flex flex-column flex-grow-1 overflow-hidden">
-    <div class="toolbar d-flex flex-wrap align-items-center gap-2 border-bottom bg-white px-3 py-2">
-      <div class="btn-group btn-group-sm" role="group" aria-label="Trip update views">
-        <button type="button" class="btn"
-          [class.btn-primary]="activeView() === 'timeline'"
-          [class.btn-outline-primary]="activeView() !== 'timeline'"
-          (click)="selectView('timeline')">
-          Timeline
-        </button>
-        <button type="button" class="btn"
-          [class.btn-danger]="activeView() === 'errors'"
-          [class.btn-outline-danger]="activeView() !== 'errors'"
-          (click)="selectView('errors')">
-          Errors <span class="badge text-bg-light ms-1">{{ errorItems().length | number }}</span>
-        </button>
-      </div>
-      <button type="button" class="btn btn-outline-secondary btn-sm d-md-none ms-auto" (click)="toggleFilters()">
-        {{ filtersExpanded() ? 'Hide filters' : 'Filters' }}
-      </button>
-      <div class="filter-controls" [class.mobile-collapsed]="!filtersExpanded()">
-        <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
-        @if (activeView() === 'timeline') {
-          <div class="agency-filter input-group input-group-sm">
-            <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
-              <option value="">All agencies ({{ agencyOptions().length | number }})</option>
-              @for (agency of agencyOptions(); track agency.id) {
-                <option [value]="agency.id">{{ agency.name }} ({{ agency.count | number }})</option>
-              }
-            </select>
-            <button type="button" class="btn agency-sort-button" [class.btn-primary]="agencySort() === 'count'"
-              [class.btn-outline-secondary]="agencySort() !== 'count'" [attr.aria-pressed]="agencySort() === 'count'"
-              aria-label="Sort agencies by result count, descending" (click)="setAgencySort('count')">Count ↓</button>
-            <button type="button" class="btn agency-sort-button" [class.btn-primary]="agencySort() === 'name'"
-              [class.btn-outline-secondary]="agencySort() !== 'name'" [attr.aria-pressed]="agencySort() === 'name'"
-              aria-label="Sort agencies alphabetically" (click)="setAgencySort('name')">A–Z</button>
-          </div>
-          <select class="form-select form-select-sm route-type-select" [value]="routeTypeFilter()" (change)="updateRouteType($event)">
-            <option value="">All route types ({{ routeTypeOptions().length | number }})</option>
-            @for (routeType of routeTypeOptions(); track routeType.id) {
-              <option [value]="routeType.id">{{ routeType.name }} ({{ routeType.count | number }})</option>
-            }
-          </select>
-          <div class="form-check ms-1">
-            <input id="active-trips-only" type="checkbox" class="form-check-input"
-              [checked]="activeTripsOnly()" [disabled]="timelineStatus() !== 'ready'"
-              (change)="updateActiveTripsOnly($event)">
-            <label class="form-check-label small" for="active-trips-only">Active trips</label>
-          </div>
-        }
-        <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
-          <option value="">All relationships</option>
-          @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count | number }})</option> }
-        </select>
-      </div>
-      @if (parseState().status === 'error') { <span class="text-danger small">{{ parseState().message }}</span> }
-    </div>
+    @if (parseState().status === 'error') {
+      <div class="text-danger small border-bottom bg-white px-3 py-2" role="alert">{{ parseState().message }}</div>
+    }
 
     @if (!metadata()) {
       <section class="empty-state d-flex flex-column flex-grow-1 align-items-center justify-content-center gap-3 p-4">
@@ -155,6 +119,49 @@
                   (click)="collapseAllRouteShortNames()"><span aria-hidden="true">▸</span> Collapse all</button>
               </div>
             </div>
+          </div>
+          <div class="filter-toggle border-bottom bg-white px-3 py-2 d-md-none">
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleFilters()"
+              [attr.aria-expanded]="filtersExpanded()">
+              {{ filtersExpanded() ? 'Hide filters' : 'Filters' }}
+            </button>
+          </div>
+          <div class="timeline-shared-filters border-bottom bg-white px-3 py-2" [class.mobile-collapsed]="!filtersExpanded()" aria-label="GTFS-RT and GTFS-S filters">
+            <span class="timeline-filter-heading">GTFS-RT + GTFS-S filters</span>
+            <div class="agency-filter input-group input-group-sm">
+              <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
+                <option value="">All agencies ({{ agencyOptions().length | number }})</option>
+                @for (agency of agencyOptions(); track agency.id) {
+                  <option [value]="agency.id">{{ agency.name }} ({{ agency.count | number }})</option>
+                }
+              </select>
+              <button type="button" class="btn agency-sort-button" [class.btn-primary]="agencySort() === 'count'"
+                [class.btn-outline-secondary]="agencySort() !== 'count'" [attr.aria-pressed]="agencySort() === 'count'"
+                aria-label="Sort agencies by result count, descending" (click)="setAgencySort('count')">Count ↓</button>
+              <button type="button" class="btn agency-sort-button" [class.btn-primary]="agencySort() === 'name'"
+                [class.btn-outline-secondary]="agencySort() !== 'name'" [attr.aria-pressed]="agencySort() === 'name'"
+                aria-label="Sort agencies alphabetically" (click)="setAgencySort('name')">A–Z</button>
+            </div>
+            <div class="form-check ms-1">
+              <input id="active-trips-only" type="checkbox" class="form-check-input"
+                [checked]="activeTripsOnly()" [disabled]="timelineStatus() !== 'ready'"
+                (change)="updateActiveTripsOnly($event)">
+              <label class="form-check-label small" for="active-trips-only">Active trips</label>
+            </div>
+          </div>
+          <div class="timeline-local-filters border-bottom bg-white px-3 py-2" [class.mobile-collapsed]="!filtersExpanded()" aria-label="GTFS-RT timeline filters">
+            <span class="timeline-filter-heading">GTFS-RT timeline filters</span>
+            <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
+            <select class="form-select form-select-sm route-type-select" [value]="routeTypeFilter()" (change)="updateRouteType($event)">
+              <option value="">All route types ({{ routeTypeOptions().length | number }})</option>
+              @for (routeType of routeTypeOptions(); track routeType.id) {
+                <option [value]="routeType.id">{{ routeType.name }} ({{ routeType.count | number }})</option>
+              }
+            </select>
+            <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
+              <option value="">All relationships</option>
+              @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count | number }})</option> }
+            </select>
           </div>
           <div class="timeline-viewport flex-grow-1">
           <div #timelineScroll class="timeline-scroll h-100 overflow-auto">
@@ -247,6 +254,19 @@
         </section>
         } @else {
         <section class="list-pane d-flex flex-column border-end" aria-label="Timeline errors">
+          <div class="filter-toggle border-bottom bg-white px-3 py-2 d-md-none">
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleFilters()"
+              [attr.aria-expanded]="filtersExpanded()">
+              {{ filtersExpanded() ? 'Hide filters' : 'Filters' }}
+            </button>
+          </div>
+          <div class="error-filters border-bottom bg-white px-3 py-2" [class.mobile-collapsed]="!filtersExpanded()" aria-label="Timeline error filters">
+            <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
+            <select class="form-select form-select-sm relationship-select" [value]="relationshipFilter()" (change)="updateRelationship($event)">
+              <option value="">All relationships</option>
+              @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count | number }})</option> }
+            </select>
+          </div>
           <div class="small text-secondary border-bottom bg-white px-3 py-2">
             {{ filteredItems().length | number }} of {{ viewItems().length | number }} timeline errors
             @if (metadata(); as feed) { · {{ feed.entityCount | number }} total feed entities }
