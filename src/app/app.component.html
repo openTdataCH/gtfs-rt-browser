@@ -92,14 +92,14 @@
             <div class="timeline-summary-main">
               <section class="timeline-summary-section timeline-now-section" aria-label="Timeline time">
                 <label class="timeline-section-heading" for="timeline-now-time">Now</label>
-                <div class="timeline-now-control d-flex align-items-center gap-1">
+                <div class="timeline-now-control">
                   <input id="timeline-now-time" type="time" class="form-control form-control-sm timeline-now-input"
                     [value]="nowTime()" (input)="updateNowTime($event)">
-                  <div class="btn-group-vertical" role="group" aria-label="Adjust now time">
-                    <button type="button" class="btn btn-outline-secondary timeline-now-step" title="1 minute later"
-                      aria-label="1 minute later" (click)="adjustNowTime(1)">▲</button>
-                    <button type="button" class="btn btn-outline-secondary timeline-now-step" title="1 minute earlier"
-                      aria-label="1 minute earlier" (click)="adjustNowTime(-1)">▼</button>
+                  <div class="btn-group" role="group" aria-label="Adjust now time by one minute">
+                    <button type="button" class="btn btn-outline-secondary btn-sm timeline-now-step" title="1 minute earlier"
+                      aria-label="1 minute earlier" (click)="adjustNowTime(-1)">←</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm timeline-now-step" title="1 minute later"
+                      aria-label="1 minute later" (click)="adjustNowTime(1)">→</button>
                   </div>
                 </div>
               </section>
