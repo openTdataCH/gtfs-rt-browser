@@ -290,7 +290,8 @@ export class AppComponent {
   protected readonly timelineGroups = computed(() => {
     const groups = new Map<string, TimelineRow[]>();
     for (const row of this.timeline().rows) {
-      const name = row.item.dto.route?.route_short_name || '_no_route_short_name';
+      const name = row.item.dto.route?.route_short_name
+        ? this.routeLabel(row.item) : '_no_route_short_name';
       const rows = groups.get(name) ?? [];
       groups.set(name, [...rows, row]);
     }
@@ -465,6 +466,14 @@ export class AppComponent {
 
   protected routeTypeLabel(routeType: number): string {
     return extendedRouteTypeLabel(routeType);
+  }
+
+  protected routeLabel(item: TripUpdate): string {
+    const shortName = item.dto.route?.route_short_name?.trim();
+    if (!shortName) return item.routeId;
+    const prefix = item.dto.route?.route_desc?.trim();
+    return prefix && !shortName.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase())
+      ? `${prefix}${shortName}` : shortName;
   }
 
   protected gtfsRouteUrl(item: TripUpdate): string {
