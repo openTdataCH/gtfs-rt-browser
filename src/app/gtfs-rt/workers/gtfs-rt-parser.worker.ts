@@ -4,7 +4,7 @@ import GtfsRealtimeBindings, { transit_realtime } from 'gtfs-realtime-bindings';
 import { APP_URLS } from '../../config';
 import {
   BusinessOrganisationDto, FeedMetadataDto, StopScheduleRelationship, StopTimeEventDto,
-  StopTimeUpdateDto, TripScheduleRelationship, TripUpdateDto
+  StopTimeUpdateDto, TripScheduleRelationship, TripTimelineUpdateDto, TripUpdateDto
 } from '../dto';
 import {
   AgencyJSON, GtfsDbLookupAgency, GtfsDbLookupRoutes, GtfsDbLookupStops, GtfsStaticDbCatalogItemJSON,
@@ -57,15 +57,23 @@ async function parseFeed(url: string): Promise<void> {
     };
     postMessage({ type: 'metadata', metadata });
     const stopsLookupPromise = fetchGtfsStopsLookup(gtfsDay)
-      .then((stops) => ({ stops }))
+      .then((stops) => {
+        const stopsById = new Map(stops.rows.map((stop) => [stop.stop_id, stop]));
+        postMessage({ type: 'stops-lookup', stopsById });
+      })
+      .catch((error: unknown) => postMessage({
+        type: 'stops-error',
+        message: error instanceof Error ? error.message : 'Unknown GTFS stops lookup error.'
+      }));
+    const tripTimelinesPromise = fetchTripTimelines(gtfsDay, feedDay)
+      .then((timelines) => ({ timelines }))
       .catch((error: unknown) => ({ error }));
 
-    const [agencyLookup, routesLookup] = await Promise.all([
+    const [agencyLookup, routesLookup, businessOrganisations] = await Promise.all([
       fetchGtfsLookup(APP_URLS.gtfsAgencyLookup, gtfsDay, 'agency'),
-      fetchGtfsLookup(APP_URLS.gtfsRoutesLookup, gtfsDay, 'routes')
+      fetchGtfsLookup(APP_URLS.gtfsRoutesLookup, gtfsDay, 'routes'),
+      fetchBusinessOrganisations()
     ]);
-    const businessOrganisations = await fetchBusinessOrganisations();
-    const tripTimelines = await fetchTripTimelines(gtfsDay, feedDay);
     console.info('GTFS static lookups parsed.', {
       gtfsDay,
       agencies: agencyLookup.rows.length,
@@ -75,7 +83,7 @@ async function parseFeed(url: string): Promise<void> {
       routes: new Map(routesLookup.rows.map((route) => [route.route_id, route])),
       agencies: new Map(agencyLookup.rows.map((agency) => [agency.agency_id, agency])),
       businessOrganisations,
-      tripTimelines: new Map(tripTimelines.rows.map((trip) => [trip.trip_id, trip])),
+      tripTimelines: new Map(),
       feedDay
     };
 
@@ -88,17 +96,22 @@ async function parseFeed(url: string): Promise<void> {
       await new Promise<void>((resolve) => setTimeout(resolve));
     }
     postMessage({ type: 'complete', count: tripEntities.length });
-    const stopsResult = await stopsLookupPromise;
-    if ('stops' in stopsResult) {
-      const stopsById = new Map(stopsResult.stops.rows.map((stop) => [stop.stop_id, stop]));
-      postMessage({ type: 'stops-lookup', stopsById });
+    const timelineResult = await tripTimelinesPromise;
+    if ('timelines' in timelineResult) {
+      const timelineLookups: LookupIndex = {
+        ...lookupIndex,
+        tripTimelines: new Map(timelineResult.timelines.rows.map((trip) => [trip.trip_id, trip]))
+      };
+      const updates = tripEntities.map((entity) => toTripTimelineUpdateDto(entity, timelineLookups));
+      postMessage({ type: 'trip-timelines', updates });
     } else {
-      const error = stopsResult.error;
+      const error = timelineResult.error;
       postMessage({
-        type: 'stops-error',
-        message: error instanceof Error ? error.message : 'Unknown GTFS stops lookup error.'
+        type: 'trip-timelines-error',
+        message: error instanceof Error ? error.message : 'Unknown GTFS day-trip timeline error.'
       });
     }
+    await stopsLookupPromise;
     postMessage({ type: 'worker-done' });
   } catch (error: unknown) {
     postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown GTFS-RT parsing error.' });
@@ -573,10 +586,6 @@ function toTripUpdateDto(
   const businessOrganisation = route
     ? lookups.businessOrganisations.get(route.agency_id)
     : undefined;
-  const timeline = trip.tripId ? lookups.tripTimelines.get(trip.tripId) : undefined;
-  const timelineResult = route
-    ? staticTimelineResult(trip.tripId, timeline, update.stopTimeUpdate, lookups.feedDay)
-    : realtimeTimelineResult(update.stopTimeUpdate, lookups.feedDay);
   return {
     entityId: entity.id,
     trip: {
@@ -597,9 +606,26 @@ function toTripUpdateDto(
     agency,
     route,
     businessOrganisation,
+    staticTripAvailable: false
+  };
+}
+
+function toTripTimelineUpdateDto(
+  entity: transit_realtime.FeedEntity,
+  lookups: LookupIndex
+): TripTimelineUpdateDto {
+  const update = entity.tripUpdate!;
+  const trip = update.trip;
+  const route = trip.routeId ? lookups.routes.get(trip.routeId) : undefined;
+  const timeline = trip.tripId ? lookups.tripTimelines.get(trip.tripId) : undefined;
+  const result = route
+    ? staticTimelineResult(trip.tripId, timeline, update.stopTimeUpdate, lookups.feedDay)
+    : realtimeTimelineResult(update.stopTimeUpdate, lookups.feedDay);
+  return {
+    entityId: entity.id,
     staticTripAvailable: timeline !== undefined,
-    timeline: timelineResult.timeline,
-    timelineError: timelineResult.error
+    timeline: result.timeline,
+    timelineError: result.error
   };
 }
 
