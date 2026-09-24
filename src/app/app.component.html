@@ -66,7 +66,8 @@
           </select>
           <div class="form-check ms-1">
             <input id="active-trips-only" type="checkbox" class="form-check-input"
-              [checked]="activeTripsOnly()" (change)="updateActiveTripsOnly($event)">
+              [checked]="activeTripsOnly()" [disabled]="timelineStatus() !== 'ready'"
+              (change)="updateActiveTripsOnly($event)">
             <label class="form-check-label small" for="active-trips-only">Active trips</label>
           </div>
         }
@@ -92,6 +93,9 @@
               {{ timeline().rows.length }}@if (timeline().rows.length !== timelineItems().length) {<span class="timeline-count-total"> / {{ timelineItems().length }}</span>}
               <span>trips</span>
             </strong>
+            @if (timelineStatus() === 'error') {
+              <span class="text-danger" role="status">Trip timelines unavailable: {{ timelineError() }}</span>
+            }
             <div class="timeline-now-control d-flex align-items-center gap-1">
               <label for="timeline-now-time">Now</label>
               <input id="timeline-now-time" type="time" class="form-control form-control-sm timeline-now-input"
@@ -120,7 +124,8 @@
               </div>
             </div>
           </div>
-          <div #timelineScroll class="timeline-scroll flex-grow-1 overflow-auto">
+          <div class="timeline-viewport flex-grow-1">
+          <div #timelineScroll class="timeline-scroll h-100 overflow-auto">
             <div class="timeline-table" [style.--timeline-width.px]="timeline().width">
               <div class="timeline-corner border-end border-bottom bg-white">
                 <span class="timeline-row-index">idx</span>
@@ -180,16 +185,27 @@
                     </span>
                   </button>
                   <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
-                    <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
-                      [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
-                      [class.timeline-block-added]="row.item.relationship === 'ADDED'"
-                      [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
-                      <span>{{ routeLabel(row.item) }} · {{ row.item.tripId }}</span>
-                    </button>
+                    @if (timelineStatus() === 'ready') {
+                      <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
+                        [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
+                        [class.timeline-block-added]="row.item.relationship === 'ADDED'"
+                        [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
+                        <span>{{ routeLabel(row.item) }} · {{ row.item.tripId }}</span>
+                      </button>
+                    }
                   </div>
                 }
               }
             </div>
+          </div>
+          @if (timelineStatus() === 'loading') {
+            <div class="timeline-fetch-overlay" role="status">
+              <span class="timeline-fetch-status">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                Fetching GTFS-S trips…
+              </span>
+            </div>
+          }
           </div>
           <footer class="timeline-footer small text-secondary border-top bg-white px-3 py-2">
             Timeline {{ timelineDateTimeLabel(timeline().start) }} → {{ timelineDateTimeLabel(timeline().end) }} · 15-minute grid

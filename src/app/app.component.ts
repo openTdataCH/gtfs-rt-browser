@@ -2,6 +2,7 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
 import { APP_URLS } from './config';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
@@ -69,6 +70,7 @@ export class AppComponent {
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
   private readonly feedSource = feedSourceFromQuery(window.location.search);
+  private feedSubscription?: Subscription;
   private nowTimeAdjusted = false;
   private startedAt = 0;
 
@@ -91,6 +93,8 @@ export class AppComponent {
     return minute < TIMELINE_START_MINUTES ? minute + 1_440 : minute;
   });
   protected readonly items = signal<readonly TripUpdate[]>([]);
+  protected readonly timelineStatus = signal<'loading' | 'ready' | 'error'>('loading');
+  protected readonly timelineError = signal<string | undefined>(undefined);
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
@@ -107,14 +111,15 @@ export class AppComponent {
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
   protected readonly timelineItems = computed(() => this.items().filter((item) =>
-    item.dto.timeline !== undefined && item.dto.timelineError === undefined));
-  protected readonly errorItems = computed(() => this.items().filter((item) =>
+    this.timelineStatus() !== 'ready'
+      || (item.dto.timeline !== undefined && item.dto.timelineError === undefined)));
+  protected readonly errorItems = computed(() => this.timelineStatus() !== 'ready' ? [] : this.items().filter((item) =>
     item.dto.timeline === undefined || item.dto.timelineError !== undefined));
   protected readonly viewItems = computed(() =>
     this.activeView() === 'timeline' ? this.timelineItems() : this.errorItems());
   protected readonly canGroupByRouteShortName = computed(() => {
     const agency = this.agencyFilter();
-    return Boolean(agency) && this.timelineItems().some((item) =>
+    return this.timelineStatus() === 'ready' && Boolean(agency) && this.timelineItems().some((item) =>
       item.agencyId === agency && item.dto.agency !== undefined && item.dto.route !== undefined);
   });
 
@@ -263,7 +268,8 @@ export class AppComponent {
   });
 
   protected readonly timeline = computed(() => {
-    const items = this.filteredItems().filter((item) => item.dto.timeline !== undefined);
+    const ready = this.timelineStatus() === 'ready';
+    const items = this.filteredItems().filter((item) => !ready || item.dto.timeline !== undefined);
     const start = TIMELINE_START_MINUTES;
     const end = TIMELINE_END_MINUTES;
     const width = Math.max(0, (end - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH);
@@ -273,15 +279,15 @@ export class AppComponent {
       return { minute, left: index * TIMELINE_CELL_WIDTH, label: major ? this.dayMinuteLabel(minute) : '', major };
     });
     const rows = items
-      .filter((item) => item.arrivalDayMinutes! > start && item.departureDayMinutes! < end)
+      .filter((item) => !ready || (item.arrivalDayMinutes! > start && item.departureDayMinutes! < end))
       .map((item, index) => {
-        const from = Math.max(start, item.departureDayMinutes!);
-        const to = Math.min(end, item.arrivalDayMinutes!);
+        const from = ready ? Math.max(start, item.departureDayMinutes!) : start;
+        const to = ready ? Math.min(end, item.arrivalDayMinutes!) : start;
         return {
           item,
           index: index + 1,
           left: (from - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH,
-          width: Math.max(3, (to - from) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH)
+          width: ready ? Math.max(3, (to - from) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH) : 0
         };
       });
     return { start, end, width, cells, rows };
@@ -332,7 +338,9 @@ export class AppComponent {
   }
 
   protected parseFeed(): void {
+    this.feedSubscription?.unsubscribe();
     this.items.set([]); this.selectedId.set(undefined); this.metadata.set(undefined);
+    this.timelineStatus.set('loading'); this.timelineError.set(undefined);
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
@@ -341,7 +349,7 @@ export class AppComponent {
     }
     this.startedAt = performance.now();
     this.parseState.set(emptyParseState('loading'));
-    this.stream.streamTripUpdates(this.feedUrl()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.feedSubscription = this.stream.streamTripUpdates(this.feedUrl()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (event) => {
         if (event.type === 'metadata') {
           this.metadata.set(event.metadata);
@@ -351,6 +359,18 @@ export class AppComponent {
           this.items.update((items) => [...items, ...event.updates]);
           this.selectedId.update((id) => id ?? event.updates[0]?.id);
           this.parseState.set({ ...emptyParseState('loading'), processed: event.processed });
+        }
+        if (event.type === 'trip-timelines') {
+          const updates = new Map(event.updates.map((update) => [update.entityId, update]));
+          this.items.update((items) => items.map((item) => {
+            const update = updates.get(item.id);
+            return update ? new TripUpdate({ ...item.dto, ...update }) : item;
+          }));
+          this.timelineStatus.set('ready');
+        }
+        if (event.type === 'trip-timelines-error') {
+          this.timelineError.set(event.message);
+          this.timelineStatus.set('error');
         }
         if (event.type === 'complete') {
           this.parseState.set({ ...emptyParseState('complete'), count: event.count, elapsedMs: performance.now() - this.startedAt });
@@ -539,6 +559,7 @@ export class AppComponent {
   }
 
   private isActiveAtNow(item: TripUpdate): boolean {
+    if (this.timelineStatus() !== 'ready') return true;
     const now = this.nowDayMinute();
     const departure = item.departureDayMinutes;
     const arrival = item.arrivalDayMinutes;
