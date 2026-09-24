@@ -21,6 +21,13 @@ export interface TripTimelineDto {
   readonly arrivalDayMinutes: number;
 }
 
+export interface TripTimelineUpdateDto {
+  readonly entityId: string;
+  readonly staticTripAvailable: boolean;
+  readonly timeline?: TripTimelineDto;
+  readonly timelineError?: string;
+}
+
 export interface BusinessOrganisationDto {
   readonly sboid: string;
   readonly organisationNumber: string;

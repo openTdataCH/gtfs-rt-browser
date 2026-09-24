@@ -1,12 +1,14 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { StopJSON } from '../../gtfs-static/dto';
-import { FeedMetadataDto, TripUpdateDto } from '../dto';
+import { FeedMetadataDto, TripTimelineUpdateDto, TripUpdateDto } from '../dto';
 import { TripUpdate } from '../models';
 
 export type GtfsRtStreamEvent =
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: readonly TripUpdate[]; processed: number }
+  | { type: 'trip-timelines'; updates: readonly TripTimelineUpdateDto[] }
+  | { type: 'trip-timelines-error'; message: string }
   | { type: 'complete'; count: number }
   | { type: 'stops-lookup'; stopsById: ReadonlyMap<string, StopJSON> }
   | { type: 'stops-error'; message: string };
@@ -14,6 +16,8 @@ export type GtfsRtStreamEvent =
 type WorkerResponse =
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: TripUpdateDto[]; processed: number }
+  | { type: 'trip-timelines'; updates: TripTimelineUpdateDto[] }
+  | { type: 'trip-timelines-error'; message: string }
   | { type: 'complete'; count: number }
   | { type: 'stops-lookup'; stopsById: Map<string, StopJSON> }
   | { type: 'stops-error'; message: string }
