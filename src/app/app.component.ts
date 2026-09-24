@@ -35,6 +35,7 @@ interface TimelineRow {
   readonly index: number;
   readonly left: number;
   readonly width: number;
+  readonly blockVisible: boolean;
 }
 
 interface StaticTripState {
@@ -110,9 +111,7 @@ export class AppComponent {
   protected readonly filtersExpanded = signal(false);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
-  protected readonly timelineItems = computed(() => this.items().filter((item) =>
-    this.timelineStatus() !== 'ready'
-      || (item.dto.timeline !== undefined && item.dto.timelineError === undefined)));
+  protected readonly timelineItems = computed(() => this.items());
   protected readonly errorItems = computed(() => this.timelineStatus() !== 'ready' ? [] : this.items().filter((item) =>
     item.dto.timeline === undefined || item.dto.timelineError !== undefined));
   protected readonly viewItems = computed(() =>
@@ -269,7 +268,7 @@ export class AppComponent {
 
   protected readonly timeline = computed(() => {
     const ready = this.timelineStatus() === 'ready';
-    const items = this.filteredItems().filter((item) => !ready || item.dto.timeline !== undefined);
+    const items = this.filteredItems();
     const start = TIMELINE_START_MINUTES;
     const end = TIMELINE_END_MINUTES;
     const width = Math.max(0, (end - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH);
@@ -278,16 +277,19 @@ export class AppComponent {
       const major = minute % 15 === 0;
       return { minute, left: index * TIMELINE_CELL_WIDTH, label: major ? this.dayMinuteLabel(minute) : '', major };
     });
-    const rows = items
-      .filter((item) => !ready || (item.arrivalDayMinutes! > start && item.departureDayMinutes! < end))
-      .map((item, index) => {
-        const from = ready ? Math.max(start, item.departureDayMinutes!) : start;
-        const to = ready ? Math.min(end, item.arrivalDayMinutes!) : start;
+    const rows = items.map((item, index) => {
+        const departure = item.departureDayMinutes;
+        const arrival = item.arrivalDayMinutes;
+        const blockVisible = ready && departure !== undefined && arrival !== undefined
+          && arrival > start && departure < end;
+        const from = blockVisible ? Math.max(start, departure) : start;
+        const to = blockVisible ? Math.min(end, arrival!) : start;
         return {
           item,
           index: index + 1,
           left: (from - start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH,
-          width: ready ? Math.max(3, (to - from) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH) : 0
+          width: blockVisible ? Math.max(3, (to - from) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH) : 0,
+          blockVisible
         };
       });
     return { start, end, width, cells, rows };

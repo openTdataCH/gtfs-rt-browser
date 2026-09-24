@@ -165,11 +165,13 @@
                         </span>
                       </button>
                       <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
-                        <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
-                          [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
-                          [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
-                          <span>{{ routeLabel(row.item) }} · {{ row.item.tripId }}</span>
-                        </button>
+                        @if (row.blockVisible) {
+                          <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
+                            [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
+                            [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
+                            <span>{{ routeLabel(row.item) }} · {{ row.item.tripId }}</span>
+                          </button>
+                        }
                       </div>
                     }
                   }
@@ -185,7 +187,7 @@
                     </span>
                   </button>
                   <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
-                    @if (timelineStatus() === 'ready') {
+                    @if (row.blockVisible) {
                       <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
                         [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
                         [class.timeline-block-added]="row.item.relationship === 'ADDED'"
