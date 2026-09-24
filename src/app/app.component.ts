@@ -69,6 +69,7 @@ export class AppComponent {
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
   private readonly feedSource = feedSourceFromQuery(window.location.search);
+  private nowTimeAdjusted = false;
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
@@ -83,17 +84,11 @@ export class AppComponent {
     const now = this.feedNow();
     return now === undefined ? undefined : Math.round((now.getTime() - this.browserNow()) / 60_000);
   });
-  protected readonly feedDayMinute = computed(() => {
-    const metadata = this.metadata();
-    if (!metadata) return undefined;
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
-    }).formatToParts(new Date(metadata.timestamp * 1000)).map((part) => [part.type, part.value]));
-    const date = `${parts['year']}-${parts['month']}-${parts['day']}`;
-    const dayOffset = (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${metadata.feedDay}T00:00:00Z`)) / 86_400_000;
-    return dayOffset * 1_440 + Number(parts['hour']) * 60
-      + Number(parts['minute']) + Number(parts['second']) / 60;
+  protected readonly nowTime = signal(localTimeLabel(Date.now()));
+  protected readonly nowDayMinute = computed(() => {
+    const [hours, minutes] = this.nowTime().split(':').map(Number);
+    const minute = hours * 60 + minutes;
+    return minute < TIMELINE_START_MINUTES ? minute + 1_440 : minute;
   });
   protected readonly items = signal<readonly TripUpdate[]>([]);
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
@@ -129,7 +124,7 @@ export class AppComponent {
     const options = new Map<string, { id: string; name: string; count: number }>();
     for (const item of this.timelineItems()) {
       if (!item.matches(this.searchTerm())
-        || (this.activeTripsOnly() && !this.isActiveAtFeedTime(item))
+        || (this.activeTripsOnly() && !this.isActiveAtNow(item))
         || (routeType && this.routeTypeKey(item) !== routeType)
         || (relationship && item.relationship !== relationship)) continue;
       const current = options.get(item.agencyId);
@@ -153,7 +148,7 @@ export class AppComponent {
     const counts = new Map<string, number>();
     for (const item of this.viewItems()) {
       if (!item.matches(this.searchTerm())
-        || (this.activeTripsOnly() && !this.isActiveAtFeedTime(item))
+        || (this.activeTripsOnly() && !this.isActiveAtNow(item))
         || (agency && item.agencyId !== agency)
         || (routeType && this.routeTypeKey(item) !== routeType)) continue;
       counts.set(item.relationship, (counts.get(item.relationship) ?? 0) + 1);
@@ -167,7 +162,7 @@ export class AppComponent {
     const options = new Map<string, { id: string; name: string; count: number }>();
     for (const item of this.timelineItems()) {
       if (!item.matches(this.searchTerm())
-        || (this.activeTripsOnly() && !this.isActiveAtFeedTime(item))
+        || (this.activeTripsOnly() && !this.isActiveAtNow(item))
         || (agency && item.agencyId !== agency)
         || (relationship && item.relationship !== relationship)) continue;
       const routeType = item.dto.route?.route_type;
@@ -194,7 +189,7 @@ export class AppComponent {
       && (!agency || item.agencyId === agency)
       && (!routeType || this.routeTypeKey(item) === routeType)
       && (!relationship || item.relationship === relationship)
-      && (!this.activeTripsOnly() || this.isActiveAtFeedTime(item)));
+      && (!this.activeTripsOnly() || this.isActiveAtNow(item)));
   });
 
   protected readonly selected = computed(() => {
@@ -310,14 +305,18 @@ export class AppComponent {
 
   protected readonly timelineNowLeft = computed(() => {
     const timeline = this.timeline();
-    const minute = this.feedDayMinute();
-    if (minute === undefined || timeline.end <= timeline.start) return undefined;
+    const minute = this.nowDayMinute();
+    if (timeline.end <= timeline.start) return undefined;
     if (minute < timeline.start || minute > timeline.end) return undefined;
     return (minute - timeline.start) / TIMELINE_CELL_MINUTES * TIMELINE_CELL_WIDTH;
   });
 
   public constructor() {
-    const clock = window.setInterval(() => this.browserNow.set(Date.now()), 30_000);
+    const clock = window.setInterval(() => {
+      const now = Date.now();
+      this.browserNow.set(now);
+      if (!this.nowTimeAdjusted) this.nowTime.set(localTimeLabel(now));
+    }, 30_000);
     this.destroyRef.onDestroy(() => window.clearInterval(clock));
     effect(() => {
       const item = this.selected();
@@ -345,7 +344,7 @@ export class AppComponent {
       next: (event) => {
         if (event.type === 'metadata') {
           this.metadata.set(event.metadata);
-          this.positionTimelineAtFeedTime();
+          this.positionTimelineAtNow();
         }
         if (event.type === 'trip-updates') {
           this.items.update((items) => [...items, ...event.updates]);
@@ -373,9 +372,22 @@ export class AppComponent {
     this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
     this.selectedId.set(undefined);
-    if (view === 'timeline') this.positionTimelineAtFeedTime();
+    if (view === 'timeline') this.positionTimelineAtNow();
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
+  protected updateNowTime(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return;
+    this.nowTimeAdjusted = true;
+    this.nowTime.set(value);
+    this.positionTimelineAtNow();
+  }
+  protected adjustNowTime(deltaMinutes: number): void {
+    const minutes = (this.nowDayMinute() + deltaMinutes + 1_440) % 1_440;
+    this.nowTimeAdjusted = true;
+    this.nowTime.set(`${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`);
+    this.positionTimelineAtNow();
+  }
   protected updateSearch(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.searchTerm.set(value);
@@ -388,7 +400,9 @@ export class AppComponent {
     this.agencySort.update((sort) => sort === 'name' ? 'count' : 'name');
   }
   protected updateAgency(event: Event): void {
-    const agency = (event.target as HTMLSelectElement).value;
+    this.applyAgencyFilter((event.target as HTMLSelectElement).value);
+  }
+  protected applyAgencyFilter(agency: string): void {
     this.agencyFilter.set(agency);
     this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
@@ -500,7 +514,7 @@ export class AppComponent {
     return `${date.toISOString().slice(0, 10)} ${hours}:${mins}`;
   }
 
-  private positionTimelineAtFeedTime(): void {
+  private positionTimelineAtNow(): void {
     window.requestAnimationFrame(() => {
       const element = this.timelineScroll()?.nativeElement;
       const nowLeft = this.timelineNowLeft();
@@ -515,11 +529,11 @@ export class AppComponent {
     return routeType === undefined ? '_no_route_type' : String(routeType);
   }
 
-  private isActiveAtFeedTime(item: TripUpdate): boolean {
-    const now = this.feedDayMinute();
+  private isActiveAtNow(item: TripUpdate): boolean {
+    const now = this.nowDayMinute();
     const departure = item.departureDayMinutes;
     const arrival = item.arrivalDayMinutes;
-    return now !== undefined && departure !== undefined && arrival !== undefined
+    return departure !== undefined && arrival !== undefined
       && departure <= now && now <= arrival;
   }
 
@@ -692,6 +706,11 @@ function scheduledDayMinute(time: string, startDate: string | undefined, feedDay
 
 function emptyParseState(status: ParseState['status']): ParseState {
   return { status, processed: 0, count: 0, elapsedMs: 0, message: '' };
+}
+
+function localTimeLabel(timestamp: number): string {
+  const now = new Date(timestamp);
+  return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 }
 
 function feedSourceFromQuery(search: string): FeedSource {
