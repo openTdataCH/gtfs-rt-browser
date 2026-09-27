@@ -160,7 +160,8 @@ export class AppComponent {
     return this.activeTripsOnly() ? `${agencyName} · active` : agencyName;
   });
   protected readonly errorItems = computed(() => this.timelineStatus() !== 'ready' ? [] : this.items().filter((item) =>
-    item.dto.timeline === undefined || item.dto.timelineError !== undefined));
+    item.dto.timeline === undefined || item.dto.timelineError !== undefined
+    || item.dto.goRealtimeStatus === 'not-listed'));
   protected readonly viewItems = computed(() =>
     this.activeView() === 'timeline' ? this.timelineItems() : this.errorItems());
   protected readonly canGroupByRouteShortName = computed(() => {

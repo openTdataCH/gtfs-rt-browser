@@ -268,7 +268,7 @@
             </select>
           </div>
           <div class="small text-secondary border-bottom bg-white px-3 py-2">
-            {{ filteredItems().length | number }} of {{ viewItems().length | number }} timeline errors
+            {{ filteredItems().length | number }} of {{ viewItems().length | number }} timeline or GO listing errors
             @if (metadata(); as feed) { · {{ feed.entityCount | number }} total feed entities }
           </div>
           <cdk-virtual-scroll-viewport class="message-viewport flex-grow-1" [itemSize]="92" [minBufferPx]="552" [maxBufferPx]="1104">
@@ -281,7 +281,13 @@
                 <span class="badge ms-auto" [class]="delayClass(item.maxDelay)">{{ delayLabel(item.maxDelay) }}</span>
               </div>
               <div class="small text-secondary text-truncate mt-1">
-                {{ item.dto.timelineError || 'Timeline bounds unavailable' }}
+                @if (item.dto.goRealtimeStatus === 'not-listed') {
+                  Route agency not listed in GO real-time CSV
+                  @if (item.dto.timelineError) { · {{ item.dto.timelineError }} }
+                  @else if (!item.dto.timeline) { · Timeline bounds unavailable }
+                } @else {
+                  {{ item.dto.timelineError || 'Timeline bounds unavailable' }}
+                }
               </div>
               <div class="entity-id text-secondary text-truncate">{{ item.id }}</div>
             </button>
@@ -330,6 +336,16 @@
                     aria-label="Open business organisation in Atlas">↗</a>
                 }
               </dd>
+              @if (item.dto.goRealtimeStatus === 'not-listed') {
+                <dt>Official GTFS-RT</dt>
+                <dd>
+                  <span class="badge text-bg-danger">Route agency not listed in GO real-time CSV</span>
+                  <div class="text-secondary small mt-1">
+                    SBOID: <span class="select-whole-id">{{ item.dto.businessOrganisation?.sboid || '—' }}</span>
+                    · GTFS agency_id: <span class="select-whole-id">{{ item.agencyId }}</span>
+                  </div>
+                </dd>
+              }
               <dt>Route ID</dt>
               <dd>
                 <span class="select-whole-id">{{ item.routeId }}</span>
