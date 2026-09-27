@@ -96,7 +96,6 @@
             </button>
           </div>
           <div class="timeline-shared-filters border-bottom bg-white px-3 py-2" [class.mobile-collapsed]="!filtersExpanded()" aria-label="GTFS-RT and GTFS-S filters">
-            <span class="timeline-filter-heading">GTFS-RT + GTFS-S filters</span>
             <div class="agency-filter input-group input-group-sm">
               <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
                 <option value="">All agencies ({{ agencyOptions().length | number }})</option>
@@ -119,7 +118,6 @@
             </div>
           </div>
           <div class="timeline-local-filters border-bottom bg-white px-3 py-2" [class.mobile-collapsed]="!filtersExpanded()" aria-label="GTFS-RT timeline filters">
-            <span class="timeline-filter-heading">GTFS-RT timeline filters</span>
             <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
             <select class="form-select form-select-sm route-type-select" [value]="routeTypeFilter()" (change)="updateRouteType($event)">
               <option value="">All route types ({{ routeTypeOptions().length | number }})</option>
