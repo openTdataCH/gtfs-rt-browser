@@ -158,6 +158,27 @@ async function parseFeed(url: string): Promise<void> {
       };
       const updates = tripEntities.map((entity) => toTripTimelineUpdateDto(entity, timelineLookups));
       postMessage({ type: 'trip-timelines', updates });
+      const feedDayRealtimeTripIds = new Set(tripEntities.flatMap((entity) => {
+        const trip = entity.tripUpdate!.trip;
+        return trip.tripId && tripServiceDay(trip.startDate, feedDay) === feedDay ? [trip.tripId] : [];
+      }));
+      const feedAgencyIds = new Set(tripEntities.flatMap((entity) => {
+        const routeId = entity.tripUpdate!.trip.routeId;
+        const agencyId = routeId ? lookupIndex.routes.get(routeId)?.agency_id : undefined;
+        return agencyId ? [agencyId] : [];
+      }));
+      const routesByRowid = new Map(routesLookup.rows.map((route) => [route.rowid, route]));
+      const staticOnlyByAgency = new Map<string, GtfsDayTripTimelineRow[]>();
+      const usedRoutes = new Map<number, RouteJSON>();
+      for (const trip of feedDayTimelines.rows) {
+        const route = routesByRowid.get(trip.route_rowid);
+        if (!route || !feedAgencyIds.has(route.agency_id) || feedDayRealtimeTripIds.has(trip.trip_id)) continue;
+        const rows = staticOnlyByAgency.get(route.agency_id) ?? [];
+        rows.push(trip);
+        staticOnlyByAgency.set(route.agency_id, rows);
+        usedRoutes.set(route.rowid, route);
+      }
+      postMessage({ type: 'static-only-trips', tripsByAgency: staticOnlyByAgency, routesByRowid: usedRoutes });
     } else {
       const error = timelineResult.error;
       postMessage({
