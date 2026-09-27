@@ -260,6 +260,36 @@ async function fetchBusinessOrganisations(): Promise<ReadonlyMap<string, Busines
   return organisations;
 }
 
+async function fetchGoRealtime(): Promise<{
+  bySboid: ReadonlyMap<string, GoRealtimeDto>;
+  byAgencyId: ReadonlyMap<string, GoRealtimeDto>;
+}> {
+  const response = await fetch(APP_URLS.goRealtime);
+  if (!response.ok) throw new Error(`GO real-time request failed: ${response.status} ${response.statusText}`);
+  const rows = parseDelimited((await response.text()).replace(/^\uFEFF/, ''), ';', 'GO real-time');
+  const header = rows.shift();
+  if (!header) throw new Error('GO real-time CSV is empty.');
+  const columns = ['sboid', 'descriptionEn', 'abbreviationEn', 'vdvBetreiberId', 'source'];
+  const indexes = columns.map((column) => header.indexOf(column));
+  if (indexes.some((index) => index < 0)) throw new Error('GO real-time CSV is missing required columns.');
+
+  const bySboid = new Map<string, GoRealtimeDto>();
+  const byAgencyId = new Map<string, GoRealtimeDto>();
+  for (const row of rows) {
+    const [sboid, descriptionEn, abbreviationEn, vdvBetreiberId, source] = indexes
+      .map((index) => row[index]?.trim() ?? '');
+    if (!sboid && !vdvBetreiberId) continue;
+    const entry = { sboid, descriptionEn, abbreviationEn, vdvBetreiberId, source };
+    if (sboid) bySboid.set(sboid, entry);
+    const agencyId = vdvBetreiberId.split(':').at(-1)?.trim();
+    if (vdvBetreiberId.includes(':') && agencyId) byAgencyId.set(agencyId, entry);
+  }
+  if (bySboid.size === 0 && byAgencyId.size === 0) {
+    throw new Error('GO real-time CSV contains no organisations.');
+  }
+  return { bySboid, byAgencyId };
+}
+
 function assertAgencySourcesPresent(
   entities: readonly transit_realtime.FeedEntity[],
   lookups: LookupIndex
