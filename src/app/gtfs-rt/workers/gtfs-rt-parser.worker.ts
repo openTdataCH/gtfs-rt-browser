@@ -309,7 +309,9 @@ function readRequiredFeedTimestamp(header: transit_realtime.FeedHeader): number 
 }
 
 async function fetchGtfsCatalog(): Promise<GtfsStaticDbCatalogJSON> {
-  const response = await fetch(APP_URLS.gtfsCatalog);
+  const url = new URL(APP_URLS.gtfsCatalog);
+  url.searchParams.set('_ts', String(Date.now()));
+  const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`GTFS static manifest request failed: ${response.status} ${response.statusText}`);
   }
