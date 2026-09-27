@@ -11,6 +11,8 @@ export interface TripUpdateDto {
   readonly agency?: AgencyJSON;
   readonly route?: RouteJSON;
   readonly businessOrganisation?: BusinessOrganisationDto;
+  readonly goRealtime?: GoRealtimeDto;
+  readonly goRealtimeStatus: 'listed' | 'not-listed' | 'unknown';
   readonly staticTripAvailable: boolean;
   readonly timeline?: TripTimelineDto;
   readonly timelineError?: string;
@@ -33,6 +35,14 @@ export interface BusinessOrganisationDto {
   readonly organisationNumber: string;
   readonly descriptionDe: string;
   readonly abbreviationDe: string;
+}
+
+export interface GoRealtimeDto {
+  readonly sboid: string;
+  readonly descriptionEn: string;
+  readonly abbreviationEn: string;
+  readonly vdvBetreiberId: string;
+  readonly source: string;
 }
 
 export interface TripDescriptorDto {
