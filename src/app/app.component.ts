@@ -660,7 +660,9 @@ interface ParsedStaticStopTime {
 function ojpSearchStopId(stopId?: string): string | undefined {
   if (!stopId || stopId === '—') return undefined;
   const sloid = /^(ch:1:sloid:[^:]+)(?::.*)?$/.exec(stopId);
-  return sloid?.[1] ?? stopId;
+  // GTFS-S can contain generated SLOIDs that OJP does not know:
+  // ch:1:sloid:2207_gen:missingSLOID_pf:1 -> ch:1:sloid:2207 for TripRequest only.
+  return sloid ? sloid[1].split('_gen', 1)[0] : stopId;
 }
 
 function scheduledSearchDateTime(day: string, departure: string): { day: string; time: string } | undefined {
