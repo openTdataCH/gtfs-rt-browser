@@ -297,13 +297,13 @@
                 [class.route-badge-scheduled]="item.relationship === 'SCHEDULED'"
                 [class.route-badge-cancelled]="item.relationship === 'CANCELED'"
                 [class.route-badge-added]="item.relationship === 'ADDED'">{{ item.relationship }}</span>
-              <div><h2 class="h4 mb-1">Trip {{ item.tripId }}</h2></div>
+              <div><h2 class="h4 mb-1">Trip <span class="select-whole-id">{{ item.tripId }}</span></h2></div>
             </div>
             <dl class="detail-grid">
               @if (item.dto.trip.originalTripId || ojpSearchUrl()) {
                 <dt>GTFS-RT originalTripId</dt>
                 <dd>
-                  <div class="font-monospace">{{ item.dto.trip.originalTripId || '—' }}</div>
+                  <div class="font-monospace"><span class="select-whole-id">{{ item.dto.trip.originalTripId || '—' }}</span></div>
                   <div class="d-flex flex-wrap gap-3 mt-1">
                     @if (ojpSearchUrl(); as url) {
                       <a [href]="url" target="_blank" rel="noopener noreferrer">OJP TripRequest ↗</a>
@@ -323,7 +323,7 @@
                   <button type="button" class="detail-agency-button" title="Filter timeline to this agency"
                     (click)="applyAgencyFilter(item.agencyId)">{{ agencyDetailLabel(item) }}</button>
                 } @else { {{ agencyDetailLabel(item) }} }
-                <span class="text-secondary">({{ item.agencyId }})</span>
+                <span class="text-secondary">(<span class="select-whole-id">{{ item.agencyId }}</span>)</span>
                 @if (item.dto.businessOrganisation) {
                   <a class="ms-1 text-decoration-none" [href]="atlasBusinessOrganisationUrl(item)"
                     target="_blank" rel="noopener noreferrer" title="Open business organisation in Atlas"
@@ -332,7 +332,7 @@
               </dd>
               <dt>Route ID</dt>
               <dd>
-                {{ item.routeId }}
+                <span class="select-whole-id">{{ item.routeId }}</span>
                 @if (item.hasRouteId && item.dto.agency) {
                   <a class="ms-1 text-decoration-none" [href]="gtfsRouteUrl(item)"
                     target="_blank" rel="noopener noreferrer" title="Open route on gtfs.ch"
@@ -340,7 +340,7 @@
                 }
               </dd>
               @if (item.dto.route; as route) {
-                <dt>Route</dt><dd>{{ routeLabel(item) }}</dd>
+                <dt>Route</dt><dd><span class="select-whole-id">{{ routeLabel(item) }}</span></dd>
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
               @if (selectedStaticTrip(); as staticTrip) {
@@ -373,7 +373,7 @@
                         <td>{{ stop.sequence === undefined ? '—' : (stop.sequence | number) }}</td>
                         <td>
                           @if (stop.name) { <div>{{ stop.name }}</div> }
-                          <div class="font-monospace" [class.small]="stop.name" [class.text-secondary]="stop.name">{{ stop.stopId }}</div>
+                          <div class="font-monospace" [class.small]="stop.name" [class.text-secondary]="stop.name"><span class="select-whole-id">{{ stop.stopId }}</span></div>
                         </td>
                         <td>{{ stop.relationship }}</td>
                         <td>{{ stop.arrival || '—' }}</td>
