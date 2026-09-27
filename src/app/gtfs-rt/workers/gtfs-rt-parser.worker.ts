@@ -46,6 +46,14 @@ async function parseFeed(url: string): Promise<void> {
     const gtfsDay = feedVersion;
     const feedDay = formatSwissDay(feedTimestamp);
     const tripEntities = feed.entity.filter((entity) => entity.tripUpdate && !entity.isDeleted);
+    const serviceDays = new Set([feedDay]);
+    const tripTimelineKeys = new Set<string>();
+    for (const entity of tripEntities) {
+      const trip = entity.tripUpdate!.trip;
+      const serviceDay = tripServiceDay(trip.startDate, feedDay);
+      serviceDays.add(serviceDay);
+      if (trip.tripId) tripTimelineKeys.add(tripTimelineKey(serviceDay, trip.tripId));
+    }
     const metadata: FeedMetadataDto = {
       feedVersion,
       feedDay,
@@ -65,7 +73,9 @@ async function parseFeed(url: string): Promise<void> {
         type: 'stops-error',
         message: error instanceof Error ? error.message : 'Unknown GTFS stops lookup error.'
       }));
-    const tripTimelinesPromise = fetchTripTimelines(gtfsDay, feedDay)
+    const tripTimelinesPromise = Promise.all([...serviceDays].map(async (day) => ({
+      day, timelines: await fetchTripTimelines(gtfsDay, day)
+    })))
       .then((timelines) => ({ timelines }))
       .catch((error: unknown) => ({ error }));
 
@@ -98,10 +108,13 @@ async function parseFeed(url: string): Promise<void> {
     postMessage({ type: 'complete', count: tripEntities.length });
     const timelineResult = await tripTimelinesPromise;
     if ('timelines' in timelineResult) {
+      const feedDayTimelines = timelineResult.timelines.find(({ day }) => day === feedDay)?.timelines;
+      if (!feedDayTimelines) throw new Error(`GTFS day-trip timelines missing for feed day ${feedDay}.`);
       const agencyByRouteRowid = new Map(routesLookup.rows.map((route) => [route.rowid, route.agency_id]));
       const staticTripCountsByAgency = new Map<string, number>();
       const timeRangesByAgency = new Map<string, number[]>();
-      for (const trip of timelineResult.timelines.rows) {
+      // Summary counts remain for the feed day; other days supply timeline matches for their TripUpdates.
+      for (const trip of feedDayTimelines.rows) {
         const agencyId = agencyByRouteRowid.get(trip.route_rowid);
         if (agencyId === undefined) {
           throw new Error(`GTFS day trip ${trip.trip_id} references unknown route rowid ${trip.route_rowid}.`);
@@ -115,9 +128,22 @@ async function parseFeed(url: string): Promise<void> {
         timeRanges.push(trip.departure_day_minutes, trip.arrival_day_minutes);
       }
       postMessage({ type: 'static-agency-trip-counts', countsByAgency: staticTripCountsByAgency, timeRangesByAgency });
+      const tripTimelines = new Map<string, GtfsDayTripTimelineRow>();
+      for (const { day, timelines } of timelineResult.timelines) {
+        const offsetMinutes = dayOffsetMinutes(day, feedDay);
+        for (const trip of timelines.rows) {
+          const key = tripTimelineKey(day, trip.trip_id);
+          if (!tripTimelineKeys.has(key)) continue;
+          tripTimelines.set(key, {
+            ...trip,
+            departure_day_minutes: trip.departure_day_minutes + offsetMinutes,
+            arrival_day_minutes: trip.arrival_day_minutes + offsetMinutes
+          });
+        }
+      }
       const timelineLookups: LookupIndex = {
         ...lookupIndex,
-        tripTimelines: new Map(timelineResult.timelines.rows.map((trip) => [trip.trip_id, trip]))
+        tripTimelines
       };
       const updates = tripEntities.map((entity) => toTripTimelineUpdateDto(entity, timelineLookups));
       postMessage({ type: 'trip-timelines', updates });
@@ -143,23 +169,38 @@ function formatSwissDay(timestamp: number): string {
   return `${values['year']}-${values['month']}-${values['day']}`;
 }
 
+function tripServiceDay(startDate: string | null | undefined, feedDay: string): string {
+  if (!startDate || !/^\d{8}$/.test(startDate)) return feedDay;
+  const day = `${startDate.slice(0, 4)}-${startDate.slice(4, 6)}-${startDate.slice(6, 8)}`;
+  const parsed = new Date(`${day}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().startsWith(day) ? day : feedDay;
+}
+
+function tripTimelineKey(day: string, tripId: string): string {
+  return `${day}\0${tripId}`;
+}
+
+function dayOffsetMinutes(day: string, feedDay: string): number {
+  return (Date.parse(`${day}T00:00:00Z`) - Date.parse(`${feedDay}T00:00:00Z`)) / 60_000;
+}
+
 async function fetchTripTimelines(
   gtfsDay: string,
-  feedDay: string
+  serviceDay: string
 ): Promise<GtfsDayTripTimelineResponse> {
   const url = new URL(APP_URLS.gtfsDayTrips);
   url.searchParams.set('gtfs_day', gtfsDay);
-  url.searchParams.set('day', feedDay);
+  url.searchParams.set('day', serviceDay);
   url.searchParams.set('fields_profile', 'query_day_trips_timeline');
   url.searchParams.set('row_format', 'array');
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`GTFS day-trip timeline request failed: ${response.status} ${response.statusText}`);
+    throw new Error(`GTFS day-trip timeline request failed for ${serviceDay}: ${response.status} ${response.statusText}`);
   }
   const json: unknown = await response.json();
   const rows = isRecord(json) ? json['rows'] : json;
   if (!isGtfsDayTripTimelineRows(rows)) {
-    throw new Error('GTFS day-trip timeline response does not contain valid timeline rows.');
+    throw new Error(`GTFS day-trip timeline response for ${serviceDay} does not contain valid timeline rows.`);
   }
   const tripTimelines: GtfsDayTripTimelineResponse = {
     rows: rows.map(([trip_id, departure_day_minutes, arrival_day_minutes, route_rowid]) => ({
@@ -167,7 +208,7 @@ async function fetchTripTimelines(
     }))
   };
   console.info('GTFS day-trip timelines parsed.', {
-    gtfsDay, feedDay, trips: tripTimelines.rows.length
+    gtfsDay, serviceDay, trips: tripTimelines.rows.length
   });
   return tripTimelines;
 }
@@ -635,7 +676,9 @@ function toTripTimelineUpdateDto(
   const update = entity.tripUpdate!;
   const trip = update.trip;
   const route = trip.routeId ? lookups.routes.get(trip.routeId) : undefined;
-  const timeline = trip.tripId ? lookups.tripTimelines.get(trip.tripId) : undefined;
+  const timeline = trip.tripId
+    ? lookups.tripTimelines.get(tripTimelineKey(tripServiceDay(trip.startDate, lookups.feedDay), trip.tripId))
+    : undefined;
   const result = route
     ? staticTimelineResult(trip.tripId, timeline, update.stopTimeUpdate, lookups.feedDay)
     : realtimeTimelineResult(update.stopTimeUpdate, lookups.feedDay);
