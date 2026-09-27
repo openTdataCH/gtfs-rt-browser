@@ -343,7 +343,7 @@
                 <dt>Route</dt><dd>{{ routeLabel(item) }}</dd>
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
-              @if (staticTripState().detail?.result?.trip; as staticTrip) {
+              @if (selectedStaticTrip(); as staticTrip) {
                 <dt>GTFS-S direction ID</dt><dd>{{ staticTrip.direction_id || '—' }}</dd>
                 <dt>GTFS-S  hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
               }
@@ -352,12 +352,12 @@
               <div class="d-flex align-items-center mb-2">
                 <h3 class="h6 mb-0">Stop times</h3>
                 <span class="badge text-bg-secondary ms-2">{{ stopTableRows().length | number }}</span>
-                @if (staticTripState().status === 'loading') {
+                @if (selectedStaticTripState().status === 'loading') {
                   <span class="spinner-border spinner-border-sm text-secondary ms-2" title="Loading GTFS static stop times"></span>
                 }
               </div>
-              @if (staticTripState().status === 'error') {
-                <div class="alert alert-warning py-2">Static stop times unavailable: {{ staticTripState().message }}</div>
+              @if (selectedStaticTripState().status === 'error') {
+                <div class="alert alert-warning py-2">Static stop times unavailable: {{ selectedStaticTripState().message }}</div>
               } @else if (stopsLookupError(); as message) {
                 <div class="alert alert-warning py-2">Stop names unavailable: {{ message }}</div>
               }

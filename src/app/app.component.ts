@@ -247,9 +247,16 @@ export class AppComponent {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });
+  protected readonly selectedStaticTripState = computed<StaticTripState>(() => {
+    const item = this.selected();
+    const gtfsDay = this.metadata()?.feedVersion;
+    const state = this.staticTripState();
+    return item && gtfsDay && state.key === `${gtfsDay}|${item.tripId}` ? state : { status: 'idle' };
+  });
+  protected readonly selectedStaticTrip = computed(() => this.selectedStaticTripState().detail?.result.trip);
   protected readonly stopTableRows = computed<readonly StopTableRow[]>(() => {
     const item = this.selected();
-    const trip = this.staticTripState().detail?.result.trip;
+    const trip = this.selectedStaticTrip();
     const metadata = this.metadata();
     if (!item) return [];
     if (!trip || !metadata) return item.stops.map((stop, index) => realtimeStopRow(stop, index));
@@ -377,7 +384,8 @@ export class AppComponent {
     effect(() => {
       const item = this.selected();
       const gtfsDay = this.metadata()?.feedVersion;
-      if (!item || !gtfsDay || !item.dto.staticTripAvailable || item.tripId === '—') {
+      if (!item || !gtfsDay || item.tripId === '—'
+        || (!item.dto.staticTripAvailable && this.activeView() !== 'errors')) {
         this.staticTripState.set({ status: 'idle' });
         return;
       }
@@ -447,7 +455,7 @@ export class AppComponent {
     this.activeTripsOnly.set(false);
     this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
-    this.selectedId.set(undefined);
+    this.selectedId.set(this.filteredItems()[0]?.id);
     if (view === 'timeline') this.positionTimelineAtNow();
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
