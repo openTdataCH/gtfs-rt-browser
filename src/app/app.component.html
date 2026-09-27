@@ -68,56 +68,25 @@
                   </div>
                 </div>
               </section>
-              <section class="timeline-summary-section" aria-label="GTFS-RT message counts">
-                <span class="timeline-section-heading">GTFS-RT messages</span>
-                <div class="timeline-stat-grid">
-                  <span class="timeline-stat-label">All</span>
-                  <span class="timeline-stat-values">
-                    <strong>@if (activeTripCount() !== undefined) { {{ activeTripCount() | number }} } @else { — }</strong> active now
-                    <span aria-hidden="true">/</span> <strong>{{ metadata()!.tripUpdateCount | number }}</strong> total
-                  </span>
-                  <span class="timeline-stat-label">Selection</span>
-                  <strong class="timeline-count">{{ filteredItems().length | number }} messages</strong>
-                </div>
+              <section class="timeline-summary-section" aria-label="All GTFS-RT messages">
+                <span class="timeline-section-heading">GTFS-RT messages · all</span>
+                <span class="timeline-stat-values">
+                  <strong>@if (activeTripCount() !== undefined) { {{ activeTripCount() | number }} } @else { — }</strong> active now
+                  <span aria-hidden="true">/</span> <strong>{{ metadata()!.tripUpdateCount | number }}</strong> total
+                </span>
               </section>
-              <section class="timeline-summary-section" aria-label="GTFS-S day trip counts">
-                <span class="timeline-section-heading">GTFS-S day trips
+              <section class="timeline-summary-section" aria-label="All GTFS-S day trips">
+                <span class="timeline-section-heading">GTFS-S day trips · all
                   @if (staticTripTotal() === undefined && timelineStatus() === 'loading') {
                     <span class="spinner-border spinner-border-sm ms-1" role="status" aria-label="Loading GTFS-S trips"></span>
                   }
                 </span>
-                <div class="timeline-stat-grid">
-                  <span class="timeline-stat-label">All</span>
-                  <span class="timeline-stat-values">
-                    <strong>@if (staticTripActive() !== undefined) { {{ staticTripActive() | number }} } @else { — }</strong> active now
-                    <span aria-hidden="true">/</span>
-                    <strong>@if (staticTripTotal() !== undefined) { {{ staticTripTotal() | number }} } @else { — }</strong> total
-                  </span>
-                  <span class="timeline-stat-label" title="GTFS-S selection follows agency and Active trips only; search, route type and relationship do not apply">
-                    {{ staticSelectionLabel() }}
-                  </span>
-                  <strong class="timeline-count timeline-count-static">@if (staticTripFiltered() !== undefined) { {{ staticTripFiltered() | number }} } @else { — } trips</strong>
-                </div>
+                <span class="timeline-stat-values">
+                  <strong>@if (staticTripActive() !== undefined) { {{ staticTripActive() | number }} } @else { — }</strong> active now
+                  <span aria-hidden="true">/</span>
+                  <strong>@if (staticTripTotal() !== undefined) { {{ staticTripTotal() | number }} } @else { — }</strong> total
+                </span>
               </section>
-            </div>
-            @if (timelineStatus() === 'error') {
-              <span class="text-danger" role="status">Trip timelines unavailable: {{ timelineError() }}</span>
-            }
-            <div class="timeline-group-controls ms-auto">
-              <span class="form-check mb-0">
-                <input id="group-route-short-name" type="checkbox" class="form-check-input"
-                  [checked]="groupByRouteShortName()" [disabled]="!canGroupByRouteShortName()"
-                  (change)="updateGroupByRouteShortName($event)">
-                <label class="form-check-label" for="group-route-short-name">Group by route short name</label>
-              </span>
-              <div class="timeline-group-actions">
-                <button type="button" class="btn btn-outline-secondary btn-sm py-0"
-                  [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
-                  (click)="expandAllRouteShortNames()"><span aria-hidden="true">▾</span> Expand all</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm py-0"
-                  [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
-                  (click)="collapseAllRouteShortNames()"><span aria-hidden="true">▸</span> Collapse all</button>
-              </div>
             </div>
           </div>
           <div class="filter-toggle border-bottom bg-white px-3 py-2 d-md-none">
@@ -162,6 +131,39 @@
               <option value="">All relationships</option>
               @for (option of relationshipOptions(); track option.name) { <option [value]="option.name">{{ option.name }} ({{ option.count | number }})</option> }
             </select>
+          </div>
+          <div class="timeline-summary small text-secondary border-bottom bg-white px-3 py-2">
+            <div class="timeline-summary-main">
+              <section class="timeline-summary-section" aria-label="GTFS-RT selection">
+                <span class="timeline-section-heading">GTFS-RT selection</span>
+                <strong class="timeline-count">{{ filteredItems().length | number }} messages</strong>
+              </section>
+              <section class="timeline-summary-section" aria-label="GTFS-S selection">
+                <span class="timeline-section-heading" title="GTFS-S selection follows agency and Active trips only; search, route type and relationship do not apply">
+                  GTFS-S · {{ staticSelectionLabel() }}
+                </span>
+                <strong class="timeline-count timeline-count-static">@if (staticTripFiltered() !== undefined) { {{ staticTripFiltered() | number }} } @else { — } trips</strong>
+              </section>
+            </div>
+            @if (timelineStatus() === 'error') {
+              <span class="text-danger" role="status">Trip timelines unavailable: {{ timelineError() }}</span>
+            }
+            <div class="timeline-group-controls ms-auto">
+              <span class="form-check mb-0">
+                <input id="group-route-short-name" type="checkbox" class="form-check-input"
+                  [checked]="groupByRouteShortName()" [disabled]="!canGroupByRouteShortName()"
+                  (change)="updateGroupByRouteShortName($event)">
+                <label class="form-check-label" for="group-route-short-name">Group by route short name</label>
+              </span>
+              <div class="timeline-group-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0"
+                  [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
+                  (click)="expandAllRouteShortNames()"><span aria-hidden="true">▾</span> Expand all</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0"
+                  [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
+                  (click)="collapseAllRouteShortNames()"><span aria-hidden="true">▸</span> Collapse all</button>
+              </div>
+            </div>
           </div>
           <div class="timeline-viewport flex-grow-1">
           <div #timelineScroll class="timeline-scroll h-100 overflow-auto">

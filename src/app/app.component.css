@@ -46,8 +46,6 @@
 .timeline-summary-section:first-child { padding-left: 0; }
 .timeline-summary-section + .timeline-summary-section { border-left: 1px solid #dee2e6; }
 .timeline-section-heading { color: #526477; font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-.timeline-stat-grid { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: .3rem .75rem; }
-.timeline-stat-label { color: #6c757d; font-size: .7rem; font-weight: 700; white-space: nowrap; }
 .timeline-stat-values { display: inline-flex; align-items: baseline; gap: .25rem; white-space: nowrap; }
 .timeline-stat-values strong { color: #212529; font-variant-numeric: tabular-nums; }
 .timeline-now-control { display: flex; flex-direction: column; gap: .25rem; width: 6.25rem; color: #495057; font-weight: 600; white-space: nowrap; }
