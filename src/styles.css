@@ -1,6 +1,9 @@
 html, body { height: 100%; }
 body { margin: 0; background: #eef1f4; color: #212529; }
 button, input, select { font: inherit; }
+.detail-grid, .stop-times-scroll { font-size: .875rem; }
+.stop-times-scroll .font-monospace { font-size: .75rem; }
+.timeline-label, .timeline-group-label, .timeline-block { font-size: .875rem; }
 .service-calendar-scroll { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .4rem; scroll-snap-type: x mandatory; }
 .service-month { flex: 0 0 15rem; padding: .5rem; border: 1px solid #dee2e6; border-radius: .4rem; scroll-snap-align: start; }
 .service-month-title { margin-bottom: .35rem; font-size: .85rem; font-weight: 600; }
