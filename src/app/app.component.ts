@@ -8,7 +8,7 @@ import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 import { extendedRouteTypeLabel } from './gtfs-static/route-types';
-import { CalendarJSON, StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
+import { CalendarJSON, GtfsDayTripTimelineRow, RouteJSON, StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
 import { GtfsStaticService } from './gtfs-static/gtfs-static.service';
 
 const TIMELINE_CELL_MINUTES = 15;
@@ -79,6 +79,7 @@ export class AppComponent {
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
   private readonly serviceCalendarScroll = viewChild<ElementRef<HTMLDivElement>>('serviceCalendarScroll');
   private readonly feedSource = feedSourceFromQuery(window.location.search);
+  private pendingAgency = new URLSearchParams(window.location.search).get('agency')?.trim() || undefined;
   private feedSubscription?: Subscription;
   private nowTimeAdjusted = false;
   private startedAt = 0;
@@ -106,6 +107,8 @@ export class AppComponent {
   protected readonly timelineError = signal<string | undefined>(undefined);
   protected readonly staticTripCountsByAgency = signal<ReadonlyMap<string, number>>(new Map());
   protected readonly staticTripTimeRangesByAgency = signal<ReadonlyMap<string, readonly number[]>>(new Map());
+  protected readonly staticOnlyTripsByAgency = signal<ReadonlyMap<string, readonly GtfsDayTripTimelineRow[]>>(new Map());
+  protected readonly staticOnlyRoutesByRowid = signal<ReadonlyMap<number, RouteJSON>>(new Map());
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
@@ -116,14 +119,47 @@ export class AppComponent {
   protected readonly routeTypeFilter = signal('');
   protected readonly relationshipFilter = signal('');
   protected readonly activeTripsOnly = signal(false);
+  protected readonly showStaticOnlyTrips = signal(false);
   protected readonly groupByRouteShortName = signal(false);
   protected readonly expandedRouteShortNames = signal<ReadonlySet<string>>(new Set());
   protected readonly filtersExpanded = signal(false);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
-  protected readonly timelineItems = computed(() => this.items());
+  protected readonly timelineItems = computed(() => {
+    const realtime = this.items();
+    const agencyId = this.agencyFilter();
+    if (!agencyId || !this.showStaticOnlyTrips() || this.timelineStatus() !== 'ready') return realtime;
+    const staticTrips = this.staticOnlyTripsByAgency().get(agencyId);
+    if (!staticTrips?.length) return realtime;
+    const routes = this.staticOnlyRoutesByRowid();
+    const example = realtime.find((item) => item.agencyId === agencyId);
+    if (!example) return realtime;
+    const feedDay = this.metadata()?.feedDay;
+    if (!feedDay) return realtime;
+    const staticOnly = staticTrips.flatMap((trip) => {
+      const route = routes.get(trip.route_rowid);
+      if (!route) return [];
+      return [new TripUpdate({
+        entityId: `static:${feedDay}:${trip.trip_id}`,
+        staticOnly: true,
+        trip: { tripId: trip.trip_id, routeId: route.route_id,
+          startDate: feedDay.replaceAll('-', ''), scheduleRelationship: 'SCHEDULED' },
+        stopTimeUpdates: [],
+        agencyId,
+        agency: example.dto.agency,
+        businessOrganisation: example.dto.businessOrganisation,
+        route,
+        goRealtimeStatus: example.dto.goRealtimeStatus,
+        staticTripAvailable: true,
+        timeline: { departureDayMinutes: trip.departure_day_minutes,
+          arrivalDayMinutes: trip.arrival_day_minutes }
+      })];
+    });
+    return [...realtime, ...staticOnly].sort((left, right) =>
+      (left.departureDayMinutes ?? Infinity) - (right.departureDayMinutes ?? Infinity));
+  });
   protected readonly activeTripCount = computed(() => this.timelineStatus() === 'ready'
-    ? this.timelineItems().filter((item) => this.isActiveAtNow(item)).length
+    ? this.items().filter((item) => this.isActiveAtNow(item)).length
     : undefined);
   protected readonly staticTripTotal = computed(() => {
     const countsByAgency = this.staticTripCountsByAgency();
@@ -177,12 +213,14 @@ export class AppComponent {
     return this.timelineStatus() === 'ready' && Boolean(agency) && this.timelineItems().some((item) =>
       item.agencyId === agency && item.dto.agency !== undefined && item.dto.route !== undefined);
   });
+  protected readonly canShowStaticOnlyTrips = computed(() =>
+    this.timelineStatus() === 'ready' && Boolean(this.agencyFilter()));
 
   protected readonly agencyOptions = computed(() => {
     const routeType = this.routeTypeFilter();
     const relationship = this.relationshipFilter();
     const options = new Map<string, { id: string; name: string; count: number }>();
-    for (const item of this.timelineItems()) {
+    for (const item of this.items()) {
       if (!item.matches(this.searchTerm())
         || (this.activeTripsOnly() && !this.isActiveAtNow(item))
         || (routeType && this.routeTypeKey(item) !== routeType)
@@ -251,6 +289,8 @@ export class AppComponent {
       && (!relationship || item.relationship === relationship)
       && (!this.activeTripsOnly() || this.isActiveAtNow(item)));
   });
+  protected readonly filteredRealtimeCount = computed(() =>
+    this.filteredItems().filter((item) => !item.isStaticOnly).length);
 
   protected readonly selected = computed(() => {
     const items = this.filteredItems();
@@ -433,6 +473,8 @@ export class AppComponent {
     this.timelineStatus.set('loading'); this.timelineError.set(undefined);
     this.staticTripCountsByAgency.set(new Map());
     this.staticTripTimeRangesByAgency.set(new Map());
+    this.staticOnlyTripsByAgency.set(new Map());
+    this.staticOnlyRoutesByRowid.set(new Map());
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
@@ -464,12 +506,17 @@ export class AppComponent {
           this.staticTripCountsByAgency.set(event.countsByAgency);
           this.staticTripTimeRangesByAgency.set(event.timeRangesByAgency);
         }
+        if (event.type === 'static-only-trips') {
+          this.staticOnlyRoutesByRowid.set(event.routesByRowid);
+          this.staticOnlyTripsByAgency.set(event.tripsByAgency);
+        }
         if (event.type === 'trip-timelines-error') {
           this.timelineError.set(event.message);
           this.timelineStatus.set('error');
         }
         if (event.type === 'complete') {
           this.parseState.set({ ...emptyParseState('complete'), count: event.count, elapsedMs: performance.now() - this.startedAt });
+          this.resolveUrlAgency();
         }
         if (event.type === 'stops-lookup') {
           this.stopsById.set(event.stopsById);
@@ -484,6 +531,10 @@ export class AppComponent {
   protected selectView(view: 'timeline' | 'errors'): void {
     this.activeView.set(view);
     this.agencyFilter.set('');
+    this.showStaticOnlyTrips.set(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('agency');
+    window.history.replaceState(window.history.state, '', url);
     this.routeTypeFilter.set('');
     this.activeTripsOnly.set(false);
     this.groupByRouteShortName.set(false);
@@ -519,11 +570,28 @@ export class AppComponent {
   protected updateAgency(event: Event): void {
     this.applyAgencyFilter((event.target as HTMLSelectElement).value);
   }
-  protected applyAgencyFilter(agency: string): void {
+  protected applyAgencyFilter(agency: string, updateUrl = true): void {
     this.agencyFilter.set(agency);
+    if (!agency) this.showStaticOnlyTrips.set(false);
+    this.pendingAgency = undefined;
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      if (agency) url.searchParams.set('agency', agency);
+      else url.searchParams.delete('agency');
+      window.history.replaceState(window.history.state, '', url);
+    }
     this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
     this.selectedId.set(this.timeline().rows[0]?.item.id);
+  }
+  private resolveUrlAgency(): void {
+    const requested = this.pendingAgency;
+    this.pendingAgency = undefined;
+    if (!requested) return;
+    const items = this.items();
+    const bySboid = items.find((item) => item.dto.businessOrganisation?.sboid === requested);
+    const match = bySboid ?? items.find((item) => item.agencyId === requested);
+    if (match) this.applyAgencyFilter(match.agencyId, false);
   }
   protected updateRouteType(event: Event): void {
     this.routeTypeFilter.set((event.target as HTMLSelectElement).value);
@@ -538,6 +606,10 @@ export class AppComponent {
   }
   protected updateActiveTripsOnly(event: Event): void {
     this.activeTripsOnly.set((event.target as HTMLInputElement).checked);
+    this.selectedId.set(this.timeline().rows[0]?.item.id);
+  }
+  protected updateShowStaticOnlyTrips(event: Event): void {
+    this.showStaticOnlyTrips.set((event.target as HTMLInputElement).checked && this.canShowStaticOnlyTrips());
     this.selectedId.set(this.timeline().rows[0]?.item.id);
   }
   protected updateGroupByRouteShortName(event: Event): void {

@@ -134,7 +134,7 @@
             <div class="timeline-summary-main">
               <section class="timeline-summary-section" aria-label="GTFS-RT selection">
                 <span class="timeline-section-heading">GTFS-RT selection</span>
-                <strong class="timeline-count">{{ filteredItems().length | number }} messages</strong>
+                <strong class="timeline-count">{{ filteredRealtimeCount() | number }} messages</strong>
               </section>
               <section class="timeline-summary-section" aria-label="GTFS-S selection">
                 <span class="timeline-section-heading" title="GTFS-S selection follows agency and Active trips only; search, route type and relationship do not apply">
@@ -147,19 +147,32 @@
               <span class="text-danger" role="status">Trip timelines unavailable: {{ timelineError() }}</span>
             }
             <div class="timeline-group-controls ms-auto">
-              <span class="form-check mb-0">
-                <input id="group-route-short-name" type="checkbox" class="form-check-input"
-                  [checked]="groupByRouteShortName()" [disabled]="!canGroupByRouteShortName()"
-                  (change)="updateGroupByRouteShortName($event)">
-                <label class="form-check-label" for="group-route-short-name">Group by route short name</label>
-              </span>
-              <div class="timeline-group-actions">
-                <button type="button" class="btn btn-outline-secondary btn-sm py-0"
-                  [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
-                  (click)="expandAllRouteShortNames()"><span aria-hidden="true">▾</span> Expand all</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm py-0"
-                  [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
-                  (click)="collapseAllRouteShortNames()"><span aria-hidden="true">▸</span> Collapse all</button>
+              @if (!agencyFilter()) {
+                <small class="text-secondary">Select an agency to use these options.</small>
+              }
+              <div class="timeline-group-options">
+                <span class="form-check mb-0">
+                  <input id="show-static-only-trips" type="checkbox" class="form-check-input"
+                    [checked]="showStaticOnlyTrips()" [disabled]="!canShowStaticOnlyTrips()"
+                    (change)="updateShowStaticOnlyTrips($event)">
+                  <label class="form-check-label" for="show-static-only-trips">Show all GTFS-S trips</label>
+                </span>
+                <div class="timeline-group-route">
+                  <span class="form-check mb-0">
+                    <input id="group-route-short-name" type="checkbox" class="form-check-input"
+                      [checked]="groupByRouteShortName()" [disabled]="!canGroupByRouteShortName()"
+                      (change)="updateGroupByRouteShortName($event)">
+                    <label class="form-check-label" for="group-route-short-name">Group by route short name</label>
+                  </span>
+                  <div class="timeline-group-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0"
+                      [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
+                      (click)="expandAllRouteShortNames()"><span aria-hidden="true">▾</span> Expand all</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0"
+                      [disabled]="!groupByRouteShortName() || !canGroupByRouteShortName() || !timelineGroups().length"
+                      (click)="collapseAllRouteShortNames()"><span aria-hidden="true">▸</span> Collapse all</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -196,18 +209,22 @@
                   @if (expandedRouteShortNames().has(group.name)) {
                     @for (row of group.rows; track row.item.id) {
                       <button type="button" class="timeline-label timeline-label-child border-0 border-end border-bottom bg-white text-start"
-                        [class.selected]="selectedId() === row.item.id" (click)="select(row.item)">
+                        [class.selected]="selectedId() === row.item.id"
+                        [class.timeline-label-static-only]="row.item.isStaticOnly" (click)="select(row.item)">
                         <span class="timeline-row-index">{{ row.index | number }}</span>
                         <span class="timeline-trip-info">
                           <strong>{{ row.item.tripId }}</strong>
-                          <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
+                          <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}
+                            @if (row.item.isStaticOnly) { · GTFS-S only }
+                          </small>
                         </span>
                       </button>
                       <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
                         @if (row.blockVisible) {
                           <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
-                            [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
-                            [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
+                            [class.timeline-block-cancelled]="row.item.cancelled"
+                            [class.timeline-block-static-only]="row.item.isStaticOnly" (click)="select(row.item)"
+                            [title]="(row.item.isStaticOnly ? 'No GTFS-RT message · ' : '') + row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
                             <span>{{ routeLabel(row.item) }} · {{ row.item.tripId }}</span>
                           </button>
                         }
@@ -218,11 +235,14 @@
               } @else {
                 @for (row of timeline().rows; track row.item.id) {
                   <button type="button" class="timeline-label border-0 border-end border-bottom bg-white text-start"
-                    [class.selected]="selectedId() === row.item.id" (click)="select(row.item)">
+                    [class.selected]="selectedId() === row.item.id"
+                    [class.timeline-label-static-only]="row.item.isStaticOnly" (click)="select(row.item)">
                     <span class="timeline-row-index">{{ row.index | number }}</span>
                     <span class="timeline-trip-info">
                       <strong>{{ row.item.tripId }}</strong>
-                      <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}</small>
+                      <small>{{ agencyLabel(row.item) }} · {{ row.item.routeId }}
+                        @if (row.item.isStaticOnly) { · GTFS-S only }
+                      </small>
                     </span>
                   </button>
                   <div class="timeline-track border-bottom" [style.width.px]="timeline().width">
@@ -230,7 +250,8 @@
                       <button type="button" class="timeline-block" [style.left.px]="row.left" [style.width.px]="row.width"
                         [class.timeline-block-cancelled]="row.item.cancelled" (click)="select(row.item)"
                         [class.timeline-block-added]="row.item.relationship === 'ADDED'"
-                        [title]="row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
+                        [class.timeline-block-static-only]="row.item.isStaticOnly"
+                        [title]="(row.item.isStaticOnly ? 'No GTFS-RT message · ' : '') + row.item.tripId + ': ' + dayMinuteLabel(row.item.departureDayMinutes) + '–' + dayMinuteLabel(row.item.arrivalDayMinutes)">
                         <span>{{ routeLabel(row.item) }} · {{ row.item.tripId }}</span>
                       </button>
                     }
@@ -300,13 +321,18 @@
             <div class="detail-summary">
             <div class="d-flex align-items-center gap-3 mb-4">
               <span class="route-badge route-badge-large"
+                [class.route-badge-static-only]="item.isStaticOnly"
                 [class.route-badge-scheduled]="item.relationship === 'SCHEDULED'"
                 [class.route-badge-cancelled]="item.relationship === 'CANCELED'"
-                [class.route-badge-added]="item.relationship === 'ADDED'">{{ item.relationship }}</span>
+                [class.route-badge-added]="item.relationship === 'ADDED'">{{ item.isStaticOnly ? 'GTFS-S only' : item.relationship }}</span>
               <div><h2 class="h4 mb-1">Trip <span class="select-whole-id">{{ item.tripId }}</span></h2></div>
             </div>
             <dl class="detail-grid">
-              @if (item.dto.trip.originalTripId || ojpSearchUrl()) {
+              @if (item.isStaticOnly) {
+                <dt>GTFS-RT</dt>
+                <dd>No GTFS-RT message for this GTFS-static trip on {{ metadata()?.feedDay }}.</dd>
+              }
+              @if (!item.isStaticOnly && (item.dto.trip.originalTripId || ojpSearchUrl())) {
                 <dt>GTFS-RT originalTripId</dt>
                 <dd>
                   <div class="font-monospace"><span class="select-whole-id">{{ item.dto.trip.originalTripId || '—' }}</span></div>
@@ -336,7 +362,7 @@
                     aria-label="Open business organisation in Atlas">↗</a>
                 }
               </dd>
-              @if (item.dto.goRealtimeStatus === 'not-listed') {
+              @if (!item.isStaticOnly && item.dto.goRealtimeStatus === 'not-listed') {
                 <dt>Official GTFS-RT</dt>
                 <dd>
                   <span class="badge text-bg-danger">Route agency not listed in GO real-time CSV</span>

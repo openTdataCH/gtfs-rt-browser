@@ -55,8 +55,10 @@
   font-variant-numeric: tabular-nums;
 }
 .timeline-now-step { flex: 1 1 0; padding: .1rem .35rem; font-size: 1rem; font-weight: 700; line-height: 1.1rem; }
-.timeline-group-controls { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
-.timeline-group-actions { display: flex; gap: .4rem; margin-left: 1.25rem; }
+.timeline-group-controls { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; }
+.timeline-group-options { display: flex; align-items: flex-start; flex-wrap: wrap; gap: .25rem 1rem; }
+.timeline-group-route { display: flex; flex-direction: column; gap: .15rem; }
+.timeline-group-actions { display: flex; gap: .3rem; margin-left: 1.25rem; }
 .timeline-footer { flex: 0 0 auto; }
 .timeline-count {
   display: inline-flex; align-items: baseline; gap: .3rem; padding: .35rem .65rem;
