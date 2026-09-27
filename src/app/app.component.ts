@@ -81,7 +81,6 @@ export class AppComponent {
   private readonly feedSource = feedSourceFromQuery(window.location.search);
   private pendingAgency = new URLSearchParams(window.location.search).get('agency')?.trim() || undefined;
   private feedSubscription?: Subscription;
-  private nowTimeAdjusted = false;
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
@@ -97,6 +96,8 @@ export class AppComponent {
     return now === undefined ? undefined : Math.round((now.getTime() - this.browserNow()) / 60_000);
   });
   protected readonly nowTime = signal(localTimeLabel(Date.now()));
+  protected readonly nowTimeDraft = signal(this.nowTime());
+  protected readonly nowTimeInvalid = signal(false);
   protected readonly nowDayMinute = computed(() => {
     const [hours, minutes] = this.nowTime().split(':').map(Number);
     const minute = hours * 60 + minutes;
@@ -435,7 +436,6 @@ export class AppComponent {
     const clock = window.setInterval(() => {
       const now = Date.now();
       this.browserNow.set(now);
-      if (!this.nowTimeAdjusted) this.nowTime.set(localTimeLabel(now));
     }, 30_000);
     this.destroyRef.onDestroy(() => window.clearInterval(clock));
     effect(() => {
@@ -543,17 +543,37 @@ export class AppComponent {
     if (view === 'timeline') this.positionTimelineAtNow();
   }
   protected trackById(_index: number, item: TripUpdate): string { return item.id; }
-  protected updateNowTime(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return;
-    this.nowTimeAdjusted = true;
+  protected resetNowTime(): void {
+    const now = Date.now();
+    this.browserNow.set(now);
+    const value = localTimeLabel(now);
+    this.nowTime.set(value);
+    this.nowTimeDraft.set(value);
+    this.nowTimeInvalid.set(false);
+    this.positionTimelineAtNow();
+  }
+  protected updateNowTimeDraft(event: Event): void {
+    this.nowTimeDraft.set((event.target as HTMLInputElement).value);
+    this.nowTimeInvalid.set(false);
+  }
+  protected commitNowTime(event: Event): void {
+    event.preventDefault();
+    const value = this.nowTimeDraft().trim();
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+      this.nowTimeInvalid.set(true);
+      return;
+    }
+    this.nowTimeInvalid.set(false);
+    this.nowTimeDraft.set(value);
     this.nowTime.set(value);
     this.positionTimelineAtNow();
   }
   protected adjustNowTime(deltaMinutes: number): void {
     const minutes = (this.nowDayMinute() + deltaMinutes + 1_440) % 1_440;
-    this.nowTimeAdjusted = true;
-    this.nowTime.set(`${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`);
+    const value = `${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`;
+    this.nowTime.set(value);
+    this.nowTimeDraft.set(value);
+    this.nowTimeInvalid.set(false);
     this.positionTimelineAtNow();
   }
   protected updateSearch(event: Event): void {

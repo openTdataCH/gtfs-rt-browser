@@ -58,8 +58,13 @@
               <section class="timeline-summary-section timeline-now-section" aria-label="Timeline time">
                 <label class="timeline-section-heading" for="timeline-now-time">Now</label>
                 <div class="timeline-now-control">
-                  <input id="timeline-now-time" type="time" class="form-control form-control-sm timeline-now-input"
-                    [value]="nowTime()" (input)="updateNowTime($event)">
+                  <div class="timeline-now-row">
+                    <input id="timeline-now-time" type="text" class="form-control form-control-sm timeline-now-input"
+                      [value]="nowTimeDraft()" [class.timeline-now-invalid]="nowTimeInvalid()" [attr.aria-invalid]="nowTimeInvalid()"
+                      maxlength="5" inputmode="numeric" (input)="updateNowTimeDraft($event)" (keydown.enter)="commitNowTime($event)">
+                    <button type="button" class="btn btn-outline-secondary btn-sm timeline-now-reset"
+                      title="Reset to current time" aria-label="Reset to current time" (click)="resetNowTime()">↻</button>
+                  </div>
                   <div class="btn-group" role="group" aria-label="Adjust now time by one minute">
                     <button type="button" class="btn btn-outline-secondary btn-sm timeline-now-step" title="1 minute earlier"
                       aria-label="1 minute earlier" (click)="adjustNowTime(-1)">←</button>

@@ -47,10 +47,10 @@
 .timeline-section-heading { color: #526477; font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
 .timeline-stat-values { display: inline-flex; align-items: baseline; gap: .25rem; white-space: nowrap; }
 .timeline-stat-values strong { color: #212529; font-variant-numeric: tabular-nums; }
-.timeline-now-control { display: flex; flex-direction: column; gap: .25rem; width: 6.25rem; color: #495057; font-weight: 600; white-space: nowrap; }
+.timeline-now-control { display: flex; flex-direction: column; gap: .25rem; width: 8rem; color: #495057; font-weight: 600; white-space: nowrap; }
 .timeline-now-control .btn-group { width: 100%; }
 .timeline-now-input {
-  width: 100%; padding-inline: .4rem; border-color: #9ec5fe;
+  width: 100%; min-width: 0; padding-inline: .4rem; border-color: #9ec5fe;
   background: #e9f2ff; color: #0a58ca; font-size: 1rem; font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
