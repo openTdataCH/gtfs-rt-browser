@@ -1,3 +1,12 @@
 html, body { height: 100%; }
 body { margin: 0; background: #eef1f4; color: #212529; }
 button, input, select { font: inherit; }
+.service-calendar-scroll { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .4rem; scroll-snap-type: x mandatory; }
+.service-month { flex: 0 0 15rem; padding: .5rem; border: 1px solid #dee2e6; border-radius: .4rem; scroll-snap-align: start; }
+.service-month-title { margin-bottom: .35rem; font-size: .85rem; font-weight: 600; }
+.service-month-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: .1rem; text-align: center; }
+.service-weekday, .service-day { display: grid; place-items: center; min-height: 1.5rem; font-size: .7rem; }
+.service-weekday { color: #6c757d; font-weight: 600; }
+.service-day { color: #adb5bd; border-radius: .2rem; }
+.service-day-active { color: #fff; background: #357abd; font-weight: 600; }
+.service-day-selected { outline: 2px solid #dc3545; outline-offset: 1px; }

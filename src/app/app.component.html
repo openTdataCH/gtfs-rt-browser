@@ -364,6 +364,32 @@
                 <dt>GTFS-S  hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
               }
             </dl>
+            @if (serviceCalendarMonths().length) {
+              <section class="service-calendar mt-4" aria-label="Trip service calendar">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <h3 class="h6 mb-0">Service days <span class="badge text-bg-secondary ms-1">{{ serviceCalendarActiveDays() | number }}</span></h3>
+                  <span class="small text-secondary">Scroll for more months →</span>
+                </div>
+                <div #serviceCalendarScroll class="service-calendar-scroll" tabindex="0" aria-label="Service months, scroll horizontally">
+                  @for (month of serviceCalendarMonths(); track month.key) {
+                    <div class="service-month" [attr.data-month]="month.key">
+                      <div class="service-month-title">{{ month.label }}</div>
+                      <div class="service-month-days">
+                        @for (weekday of ['M', 'T', 'W', 'T', 'F', 'S', 'S']; track $index) {
+                          <span class="service-weekday">{{ weekday }}</span>
+                        }
+                        @for (blank of month.leadingDays; track blank) { <span></span> }
+                        @for (day of month.days; track day.date) {
+                          <span class="service-day" [class.service-day-active]="day.active"
+                            [class.service-day-selected]="day.selected"
+                            [attr.title]="day.date + (day.active ? ' · service runs' : ' · no service')">{{ day.day }}</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
             <div class="mt-4">
               <div class="d-flex align-items-center mb-2">
                 <h3 class="h6 mb-0">Stop times</h3>

@@ -8,7 +8,7 @@ import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 import { extendedRouteTypeLabel } from './gtfs-static/route-types';
-import { StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
+import { CalendarJSON, StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
 import { GtfsStaticService } from './gtfs-static/gtfs-static.service';
 
 const TIMELINE_CELL_MINUTES = 15;
@@ -57,6 +57,13 @@ interface StopTableRow {
   readonly isSkipped: boolean;
 }
 
+interface ServiceCalendarMonth {
+  readonly key: string;
+  readonly label: string;
+  readonly days: { date: string; day: number; active: boolean; selected: boolean }[];
+  readonly leadingDays: readonly number[];
+}
+
 @Component({
   selector: 'app-root',
   imports: [ScrollingModule, DatePipe, DecimalPipe],
@@ -70,6 +77,7 @@ export class AppComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
+  private readonly serviceCalendarScroll = viewChild<ElementRef<HTMLDivElement>>('serviceCalendarScroll');
   private readonly feedSource = feedSourceFromQuery(window.location.search);
   private feedSubscription?: Subscription;
   private nowTimeAdjusted = false;
@@ -255,6 +263,14 @@ export class AppComponent {
     return item && gtfsDay && state.key === `${gtfsDay}|${item.tripId}` ? state : { status: 'idle' };
   });
   protected readonly selectedStaticTrip = computed(() => this.selectedStaticTripState().detail?.result.trip);
+  protected readonly serviceCalendarMonths = computed(() => {
+    const calendar = this.selectedStaticTripState().detail?.result.calendar;
+    if (!calendar) return [];
+    return buildServiceCalendarMonths(calendar, this.selected()?.dto.trip.startDate);
+  });
+  protected readonly serviceCalendarActiveDays = computed(() =>
+    this.serviceCalendarMonths().reduce((total, month) =>
+      total + month.days.filter((day) => day.active).length, 0));
   protected readonly stopTableRows = computed<readonly StopTableRow[]>(() => {
     const item = this.selected();
     const trip = this.selectedStaticTrip();
@@ -391,6 +407,22 @@ export class AppComponent {
         return;
       }
       void this.loadSelectedStaticTrip(gtfsDay, item.tripId);
+    });
+    effect(() => {
+      const months = this.serviceCalendarMonths();
+      const selectedStartDate = this.selected()?.dto.trip.startDate;
+      if (!months.length) return;
+      const targetMonth = selectedStartDate && /^\d{8}$/.test(selectedStartDate)
+        ? `${selectedStartDate.slice(0, 4)}-${selectedStartDate.slice(4, 6)}`
+        : months[0].key;
+      window.requestAnimationFrame(() => {
+        const scroller = this.serviceCalendarScroll()?.nativeElement;
+        const card = Array.from(scroller?.querySelectorAll<HTMLElement>('[data-month]') ?? [])
+          .find((element) => element.dataset['month'] === targetMonth);
+        if (scroller && card) {
+          scroller.scrollLeft += card.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
+        }
+      });
     });
     this.parseFeed();
   }
@@ -798,6 +830,35 @@ function scheduledDayMinute(time: string, startDate: string | undefined, feedDay
     : feedDay;
   const dayOffset = (Date.parse(`${serviceDay}T00:00:00Z`) - Date.parse(`${feedDay}T00:00:00Z`)) / 86_400_000;
   return dayOffset * 1_440 + Number(match[1]) * 60 + Number(match[2]) + Number(match[3] ?? 0) / 60;
+}
+
+function buildServiceCalendarMonths(calendar: CalendarJSON, selectedStartDate?: string): ServiceCalendarMonth[] {
+  const match = /^(\d{4})(\d{2})(\d{2})$/.exec(calendar.start_date);
+  if (!match || !/^[01]+$/.test(calendar.day_bits)) return [];
+  const start = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (Number.isNaN(start.getTime()) || start.toISOString().slice(0, 10) !==
+    `${match[1]}-${match[2]}-${match[3]}`) return [];
+
+  const months: ServiceCalendarMonth[] = [];
+  for (let index = 0; index < calendar.day_bits.length; index += 1) {
+    const date = new Date(start.getTime() + index * 86_400_000);
+    const key = date.toISOString().slice(0, 7);
+    if (months.at(-1)?.key !== key) {
+      months.push({
+        key,
+        label: new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date),
+        leadingDays: Array.from({ length: (date.getUTCDay() + 6) % 7 }, (_, day) => day),
+        days: []
+      });
+    }
+    months.at(-1)!.days.push({
+      date: date.toISOString().slice(0, 10),
+      day: date.getUTCDate(),
+      active: calendar.day_bits[index] === '1',
+      selected: selectedStartDate === date.toISOString().slice(0, 10).replaceAll('-', '')
+    });
+  }
+  return months;
 }
 
 function emptyParseState(status: ParseState['status']): ParseState {
