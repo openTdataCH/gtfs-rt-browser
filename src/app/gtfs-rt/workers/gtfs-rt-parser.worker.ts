@@ -33,9 +33,15 @@ addEventListener('message', ({ data }: MessageEvent<ParseRequest>) => {
 
 async function parseFeed(url: string): Promise<void> {
   try {
-    // The catalog is intentionally the first awaited application dependency.
-    const catalog = await fetchGtfsCatalog();
-    console.info('GTFS static manifest parsed.', { items: catalog.items.length });
+    // Both sources are required before the GTFS-RT feed can be parsed.
+    const [catalog, businessOrganisations] = await Promise.all([
+      fetchGtfsCatalog(),
+      fetchBusinessOrganisations()
+    ]);
+    console.info('GTFS static manifest and business organisations parsed.', {
+      catalogItems: catalog.items.length,
+      businessOrganisations: businessOrganisations.size
+    });
 
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Feed request failed: ${response.status} ${response.statusText}`);
@@ -79,10 +85,9 @@ async function parseFeed(url: string): Promise<void> {
       .then((timelines) => ({ timelines }))
       .catch((error: unknown) => ({ error }));
 
-    const [agencyLookup, routesLookup, businessOrganisations] = await Promise.all([
+    const [agencyLookup, routesLookup] = await Promise.all([
       fetchGtfsLookup(APP_URLS.gtfsAgencyLookup, gtfsDay, 'agency'),
-      fetchGtfsLookup(APP_URLS.gtfsRoutesLookup, gtfsDay, 'routes'),
-      fetchBusinessOrganisations()
+      fetchGtfsLookup(APP_URLS.gtfsRoutesLookup, gtfsDay, 'routes')
     ]);
     console.info('GTFS static lookups parsed.', {
       gtfsDay,
