@@ -31,6 +31,7 @@ export class TripUpdate {
   }
 
   public get id(): string { return this.dto.entityId; }
+  public get isStaticOnly(): boolean { return this.dto.staticOnly === true; }
   public get tripId(): string { return this.dto.trip.tripId || '—'; }
   public get routeId(): string { return this.dto.trip.routeId || '—'; }
   public get hasRouteId(): boolean { return Boolean(this.dto.trip.routeId); }

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { StopJSON } from '../../gtfs-static/dto';
+import { GtfsDayTripTimelineRow, RouteJSON, StopJSON } from '../../gtfs-static/dto';
 import { FeedMetadataDto, TripTimelineUpdateDto, TripUpdateDto } from '../dto';
 import { TripUpdate } from '../models';
 
@@ -9,6 +9,7 @@ export type GtfsRtStreamEvent =
   | { type: 'trip-updates'; updates: readonly TripUpdate[]; processed: number }
   | { type: 'trip-timelines'; updates: readonly TripTimelineUpdateDto[] }
   | { type: 'static-agency-trip-counts'; countsByAgency: ReadonlyMap<string, number>; timeRangesByAgency: ReadonlyMap<string, readonly number[]> }
+  | { type: 'static-only-trips'; tripsByAgency: ReadonlyMap<string, readonly GtfsDayTripTimelineRow[]>; routesByRowid: ReadonlyMap<number, RouteJSON> }
   | { type: 'trip-timelines-error'; message: string }
   | { type: 'complete'; count: number }
   | { type: 'stops-lookup'; stopsById: ReadonlyMap<string, StopJSON> }
@@ -19,6 +20,7 @@ type WorkerResponse =
   | { type: 'trip-updates'; updates: TripUpdateDto[]; processed: number }
   | { type: 'trip-timelines'; updates: TripTimelineUpdateDto[] }
   | { type: 'static-agency-trip-counts'; countsByAgency: Map<string, number>; timeRangesByAgency: Map<string, number[]> }
+  | { type: 'static-only-trips'; tripsByAgency: Map<string, GtfsDayTripTimelineRow[]>; routesByRowid: Map<number, RouteJSON> }
   | { type: 'trip-timelines-error'; message: string }
   | { type: 'complete'; count: number }
   | { type: 'stops-lookup'; stopsById: Map<string, StopJSON> }

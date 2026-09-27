@@ -2,6 +2,7 @@ import type { AgencyJSON, RouteJSON } from '../../gtfs-static/dto';
 
 export interface TripUpdateDto {
   readonly entityId: string;
+  readonly staticOnly?: boolean;
   readonly trip: TripDescriptorDto;
   readonly vehicle?: VehicleDescriptorDto;
   readonly stopTimeUpdates: readonly StopTimeUpdateDto[];
