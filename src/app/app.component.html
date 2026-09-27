@@ -391,12 +391,15 @@
               </section>
             }
             <div class="mt-4">
+              @if (selectedStaticTripState().status === 'loading') {
+                <div class="d-flex align-items-center gap-2 small text-secondary mb-2" role="status">
+                  <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                  Loading GTFS-static trip detail…
+                </div>
+              }
               <div class="d-flex align-items-center mb-2">
                 <h3 class="h6 mb-0">Stop times</h3>
                 <span class="badge text-bg-secondary ms-2">{{ stopTableRows().length | number }}</span>
-                @if (selectedStaticTripState().status === 'loading') {
-                  <span class="spinner-border spinner-border-sm text-secondary ms-2" title="Loading GTFS static stop times"></span>
-                }
               </div>
               @if (selectedStaticTripState().status === 'error') {
                 <div class="alert alert-warning py-2">Static stop times unavailable: {{ selectedStaticTripState().message }}</div>
