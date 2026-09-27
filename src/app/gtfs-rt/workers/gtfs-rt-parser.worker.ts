@@ -3,7 +3,7 @@
 import GtfsRealtimeBindings, { transit_realtime } from 'gtfs-realtime-bindings';
 import { APP_URLS } from '../../config';
 import {
-  BusinessOrganisationDto, FeedMetadataDto, StopScheduleRelationship, StopTimeEventDto,
+  BusinessOrganisationDto, FeedMetadataDto, GoRealtimeDto, StopScheduleRelationship, StopTimeEventDto,
   StopTimeUpdateDto, TripScheduleRelationship, TripTimelineUpdateDto, TripUpdateDto
 } from '../dto';
 import {
@@ -22,6 +22,8 @@ interface LookupIndex {
   readonly routes: ReadonlyMap<string, RouteJSON>;
   readonly agencies: ReadonlyMap<string, AgencyJSON>;
   readonly businessOrganisations: ReadonlyMap<string, BusinessOrganisationDto>;
+  readonly goRealtimeBySboid: ReadonlyMap<string, GoRealtimeDto>;
+  readonly goRealtimeByAgencyId: ReadonlyMap<string, GoRealtimeDto>;
   readonly tripTimelines: ReadonlyMap<string, GtfsDayTripTimelineRow>;
   readonly feedDay: string;
 }
@@ -33,14 +35,16 @@ addEventListener('message', ({ data }: MessageEvent<ParseRequest>) => {
 
 async function parseFeed(url: string): Promise<void> {
   try {
-    // Both sources are required before the GTFS-RT feed can be parsed.
-    const [catalog, businessOrganisations] = await Promise.all([
+    // All three sources are required before the GTFS-RT feed can be parsed.
+    const [catalog, businessOrganisations, goRealtime] = await Promise.all([
       fetchGtfsCatalog(),
-      fetchBusinessOrganisations()
+      fetchBusinessOrganisations(),
+      fetchGoRealtime()
     ]);
-    console.info('GTFS static manifest and business organisations parsed.', {
+    console.info('Required GTFS and organisation sources parsed.', {
       catalogItems: catalog.items.length,
-      businessOrganisations: businessOrganisations.size
+      businessOrganisations: businessOrganisations.size,
+      goRealtime: goRealtime.bySboid.size
     });
 
     const response = await fetch(url);
@@ -98,6 +102,8 @@ async function parseFeed(url: string): Promise<void> {
       routes: new Map(routesLookup.rows.map((route) => [route.route_id, route])),
       agencies: new Map(agencyLookup.rows.map((agency) => [agency.agency_id, agency])),
       businessOrganisations,
+      goRealtimeBySboid: goRealtime.bySboid,
+      goRealtimeByAgencyId: goRealtime.byAgencyId,
       tripTimelines: new Map(),
       feedDay
     };
@@ -311,7 +317,7 @@ function assertAgencySourcesPresent(
   }
 }
 
-function parseDelimited(input: string, delimiter: string): string[][] {
+function parseDelimited(input: string, delimiter: string, source = 'Business-organisation'): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -327,7 +333,7 @@ function parseDelimited(input: string, delimiter: string): string[][] {
       row.push(field); rows.push(row); row = []; field = '';
     } else field += char;
   }
-  if (quoted) throw new Error('Business-organisation CSV contains an unterminated quoted field.');
+  if (quoted) throw new Error(`${source} CSV contains an unterminated quoted field.`);
   if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
   return rows;
 }
@@ -682,6 +688,10 @@ function toTripUpdateDto(
   const businessOrganisation = route
     ? lookups.businessOrganisations.get(route.agency_id)
     : undefined;
+  // A known SBOID is authoritative; only fall back to the VDV suffix when no SBOID exists.
+  const goRealtime = businessOrganisation?.sboid
+    ? lookups.goRealtimeBySboid.get(businessOrganisation.sboid)
+    : route ? lookups.goRealtimeByAgencyId.get(route.agency_id) : undefined;
   return {
     entityId: entity.id,
     trip: {
@@ -702,6 +712,8 @@ function toTripUpdateDto(
     agency,
     route,
     businessOrganisation,
+    goRealtime,
+    goRealtimeStatus: !route ? 'unknown' : goRealtime ? 'listed' : 'not-listed',
     staticTripAvailable: false
   };
 }
