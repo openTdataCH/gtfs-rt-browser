@@ -12,5 +12,6 @@ export const APP_URLS = {
   atlasBusinessOrganisations:
     'https://atlas.app.sbb.ch/business-organisation-directory/business-organisations',
   businessOrganisations:
-    'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv'
+    'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv',
+  goRealtime: 'https://tools.opentransportdata.swiss/data/go-realtime.csv'
 } as const;
