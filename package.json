@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prestart": "node scripts/generate-build-info.mjs --development",
     "start": "ng serve --port 4206 --live-reload false",
+    "prebuild": "node scripts/generate-build-info.mjs",
     "build": "ng build",
     "test": "ng test --watch=false"
   },
