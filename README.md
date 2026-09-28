@@ -16,7 +16,7 @@ npm start
 
 | Parameter | Purpose |
 | --- | --- |
-| `agency` | Select an agency after the feed loads. Matches an exact business-organisation SBOID first, then an exact GTFS-static `agency_id`, among agencies present in the feed. Changing the agency dropdown updates this parameter using the GTFS `agency_id`. |
+| `agency` | Select an agency after the feed loads. Accepts either a business-organisation SBOID (for example, `ch:1:sboid:100001`) or a GTFS-static `agency_id`. Exact matches are checked in that order among agencies present in the loaded feed. If neither matches, no agency is selected. Changing the agency dropdown writes the GTFS `agency_id` to the URL. |
 | `q` | Search the loaded messages by trip, route, vehicle, agency, SBOID, or stop ID. This does not select the agency dropdown. Editing the search box updates this parameter. |
 | `active` | Enable **Active trips** at startup with `yes`, `1`, or `true` (case-insensitive). The checkbox writes `active=yes` when enabled and removes the parameter when disabled. |
 | `route_type` | Filter by a numeric GTFS route type, such as `101`. The parameter is absent for **All route types** and **missing route type**. |
