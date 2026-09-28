@@ -330,7 +330,9 @@
                 [class.route-badge-scheduled]="item.relationship === 'SCHEDULED'"
                 [class.route-badge-cancelled]="item.relationship === 'CANCELED'"
                 [class.route-badge-added]="item.relationship === 'ADDED'">{{ item.isStaticOnly ? 'GTFS-S only' : item.relationship }}</span>
-              <div><h2 class="h4 mb-1">Trip <span class="select-whole-id">{{ item.tripId }}</span></h2></div>
+              <div>
+                <h2 class="h4 mb-1">Trip <span class="select-whole-id">{{ item.tripId }}</span></h2>
+              </div>
             </div>
             <dl class="detail-grid">
               @if (item.isStaticOnly) {
