@@ -886,6 +886,46 @@ function stopProgressMinute(
   const scheduled = scheduledDeparture ?? scheduledArrival;
   const scheduledMinute = scheduled ? scheduledDayMinute(scheduled, startDate, feedDay) : undefined;
   return scheduledMinute === undefined ? undefined : scheduledMinute + (event?.delay ?? 0) / 60;
+
+function approximateTripMapUrl(rows: readonly StopTableRow[], now: number): string | undefined {
+  const stops = rows.filter((row) => row.longitude !== undefined && row.latitude !== undefined
+    && Number.isFinite(row.longitude) && Number.isFinite(row.latitude)
+    && Math.abs(row.latitude) < 85
+    && (row.arrivalMinute !== undefined || row.departureMinute !== undefined))
+    .sort((left, right) => (left.arrivalMinute ?? left.departureMinute!)
+      - (right.arrivalMinute ?? right.departureMinute!));
+  if (!stops.length) return undefined;
+
+  // Same straight-line, stop-to-stop approximation as the showcases Trip.computeMapURL helper.
+  let longitude = stops[0].longitude!;
+  let latitude = stops[0].latitude!;
+  for (let index = 1; index < stops.length; index += 1) {
+    const previous = stops[index - 1];
+    const next = stops[index];
+    const arrival = next.arrivalMinute ?? next.departureMinute!;
+    if (now < arrival) {
+      const departure = previous.departureMinute ?? previous.arrivalMinute!;
+      const fraction = arrival > departure ? Math.max(0, Math.min(1, (now - departure) / (arrival - departure))) : 0;
+      longitude = previous.longitude! + fraction * (next.longitude! - previous.longitude!);
+      latitude = previous.latitude! + fraction * (next.latitude! - previous.latitude!);
+      break;
+    }
+    longitude = next.longitude!;
+    latitude = next.latitude!;
+  }
+
+  const radius = 6_378_137;
+  const x = radius * longitude * Math.PI / 180;
+  const y = radius * Math.log(Math.tan(Math.PI / 4 + latitude * Math.PI / 360));
+  const url = new URL('https://maps2.trafimage.ch/ch.sbb.netzkarte');
+  url.searchParams.set('baselayers', 'ch.sbb.netzkarte,ch.sbb.netzkarte.dark,ch.sbb.netzkarte.luftbild.group,ch.sbb.netzkarte.landeskarte,ch.sbb.netzkarte.landeskarte.grau');
+  url.searchParams.set('display_srs', 'EPSG:2056');
+  url.searchParams.set('lang', 'de');
+  url.searchParams.set('layers', 'ch.sbb.puenktlichkeit-all,ch.sbb.netzkarte.buslinien');
+  url.searchParams.set('x', String(x));
+  url.searchParams.set('y', String(y));
+  url.searchParams.set('z', '16');
+  return url.toString();
 }
 
 function findBestStopMatch(
