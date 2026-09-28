@@ -4,6 +4,18 @@ button, input, select { font: inherit; }
 .detail-grid, .stop-times-scroll { font-size: .875rem; }
 .stop-times-scroll .font-monospace { font-size: .75rem; }
 .timeline-label, .timeline-group-label, .timeline-block { font-size: .875rem; }
+.timeline-label.timeline-label-static-only { background: #f1f3f5 !important; }
+.timeline-label.timeline-label-static-only.selected { background: #dee2e6 !important; box-shadow: inset 4px 0 #6c757d; }
+.timeline-block.timeline-block-static-only {
+  background: repeating-linear-gradient(135deg, #d7dce1 0, #d7dce1 8px, #b8c0c8 8px, #b8c0c8 12px) !important;
+  border-color: #868e96 !important;
+  color: #343a40 !important;
+}
+.route-badge.route-badge-static-only { background: #6c757d; }
+.timeline-group-actions .btn { padding: 0 .3rem; font-size: .7rem; line-height: 1.25; }
+.timeline-now-row { display: flex; gap: .2rem; }
+.timeline-now-reset { flex: 0 0 auto; padding: 0 .35rem; font-size: 1rem; line-height: 1; }
+.timeline-now-input.timeline-now-invalid { border-color: #dc3545; }
 .service-calendar-scroll { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .4rem; scroll-snap-type: x mandatory; }
 .service-month { flex: 0 0 15rem; padding: .5rem; border: 1px solid #dee2e6; border-radius: .4rem; scroll-snap-align: start; }
 .service-month-title { margin-bottom: .35rem; font-size: .85rem; font-weight: 600; }
