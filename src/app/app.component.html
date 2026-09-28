@@ -440,12 +440,14 @@
             </div>
             </div>
             <section class="stop-times-section" aria-label="Stop times">
-              <div class="stop-times-scroll table-responsive border rounded-2">
+              <div #stopTimesScroll class="stop-times-scroll table-responsive border rounded-2">
                 <table class="table table-sm table-hover align-middle mb-0">
                   <thead><tr><th>#</th><th>Stop</th><th>Relationship</th><th>Arrival</th><th>Departure</th><th class="text-end">Delay</th></tr></thead>
                   <tbody>
-                    @for (stop of stopTableRows(); track stop.key) {
-                      <tr [class.table-warning]="stop.isSkipped">
+                    @for (stop of stopTableRows(); track stop.key; let index = $index) {
+                      <tr [class.table-warning]="stop.isSkipped"
+                        [class.stop-passed]="stopProgress()?.passedIndexes?.has(index)"
+                        [class.stop-current]="stopProgress()?.nextIndex === index">
                         <td>{{ stop.sequence === undefined ? '—' : (stop.sequence | number) }}</td>
                         <td>
                           @if (stop.name) { <div>{{ stop.name }}</div> }

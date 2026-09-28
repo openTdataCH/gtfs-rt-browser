@@ -60,6 +60,7 @@ interface StopTableRow {
   readonly departure?: string;
   readonly delay?: number;
   readonly isSkipped: boolean;
+  readonly progressMinute?: number;
 }
 
 interface ServiceCalendarMonth {
@@ -83,6 +84,7 @@ export class AppComponent {
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
   private readonly serviceCalendarScroll = viewChild<ElementRef<HTMLDivElement>>('serviceCalendarScroll');
+  private readonly stopTimesScroll = viewChild<ElementRef<HTMLDivElement>>('stopTimesScroll');
   private readonly initialQuery = new URLSearchParams(window.location.search);
   private readonly feedSource = feedSourceFromQuery(window.location.search);
   private pendingAgency = this.initialQuery.get('agency')?.trim() || undefined;
@@ -330,7 +332,7 @@ export class AppComponent {
     const trip = this.selectedStaticTrip();
     const metadata = this.metadata();
     if (!item) return [];
-    if (!trip || !metadata) return item.stops.map((stop, index) => realtimeStopRow(stop, index));
+    if (!trip || !metadata) return item.stops.map((stop, index) => realtimeStopRow(stop, index, metadata?.feedDay));
 
     const unmatchedRealtime = new Set(item.stops);
     const staticRows = parseStaticStopTimes(trip.stop_times_s).map((stop, index): StopTableRow => {
@@ -349,12 +351,26 @@ export class AppComponent {
         arrival: stop.arrival,
         departure: stop.departure,
         delay: departureDelay ?? arrivalDelay,
-        isSkipped: realtime?.isSkipped ?? false
+        isSkipped: realtime?.isSkipped ?? false,
+        progressMinute: stopProgressMinute(realtime, stop.departure, stop.arrival,
+          item.dto.trip.startDate, metadata.feedDay)
       };
     });
     const unmatchedRows = [...unmatchedRealtime].map((stop, index) =>
-      realtimeStopRow(stop, staticRows.length + index));
+      realtimeStopRow(stop, staticRows.length + index, metadata.feedDay));
     return [...staticRows, ...unmatchedRows];
+  });
+  protected readonly stopProgress = computed(() => {
+    const item = this.selected();
+    const rows = this.stopTableRows();
+    if (!item || !this.isActiveAtNow(item)) return undefined;
+    const now = this.nowDayMinute();
+    const nextIndex = rows.findIndex((row) => row.progressMinute !== undefined && row.progressMinute >= now);
+    return nextIndex < 0 ? undefined : {
+      nextIndex,
+      passedIndexes: new Set(rows.flatMap((row, index) =>
+        row.progressMinute !== undefined && row.progressMinute < now ? [index] : []))
+    };
   });
 
   protected readonly ojpSearchUrl = computed(() => {
@@ -476,6 +492,19 @@ export class AppComponent {
           scroller.scrollLeft += card.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
         }
       });
+    });
+    effect((onCleanup) => {
+      const scroller = this.stopTimesScroll()?.nativeElement;
+      const nextIndex = this.stopProgress()?.nextIndex;
+      const selectedId = this.selected()?.id;
+      if (!scroller || nextIndex === undefined || !selectedId) return;
+      const frame = window.requestAnimationFrame(() => {
+        const row = scroller.querySelector<HTMLElement>('tr.stop-current');
+        if (!row) return;
+        const offset = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        scroller.scrollTop += offset - scroller.clientHeight / 3;
+      });
+      onCleanup(() => window.cancelAnimationFrame(frame));
     });
     this.parseFeed();
   }
@@ -831,7 +860,7 @@ function swissSearchDateTime(timestamp: number): { day: string; time: string } {
   };
 }
 
-function realtimeStopRow(stop: StopTimeUpdate, index: number): StopTableRow {
+function realtimeStopRow(stop: StopTimeUpdate, index: number, feedDay?: string): StopTableRow {
   return {
     key: `realtime:${index}:${stop.stopId}`,
     sequence: stop.dto.stopSequence,
@@ -840,8 +869,23 @@ function realtimeStopRow(stop: StopTimeUpdate, index: number): StopTableRow {
     arrival: formatEpochTime(stop.dto.arrival?.time),
     departure: formatEpochTime(stop.dto.departure?.time),
     delay: stop.effectiveDelay,
-    isSkipped: stop.isSkipped
+    isSkipped: stop.isSkipped,
+    progressMinute: feedDay ? stopProgressMinute(stop, undefined, undefined, undefined, feedDay) : undefined
   };
+}
+
+function stopProgressMinute(
+  realtime: StopTimeUpdate | undefined,
+  scheduledDeparture: string | undefined,
+  scheduledArrival: string | undefined,
+  startDate: string | undefined,
+  feedDay: string
+): number | undefined {
+  const event = realtime?.dto.departure ?? realtime?.dto.arrival;
+  if (event?.time !== undefined) return swissDayMinute(event.time, feedDay);
+  const scheduled = scheduledDeparture ?? scheduledArrival;
+  const scheduledMinute = scheduled ? scheduledDayMinute(scheduled, startDate, feedDay) : undefined;
+  return scheduledMinute === undefined ? undefined : scheduledMinute + (event?.delay ?? 0) / 60;
 }
 
 function findBestStopMatch(
