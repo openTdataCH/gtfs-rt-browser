@@ -1,5 +1,6 @@
 html, body { height: 100%; }
 body { margin: 0; background: #eef1f4; color: #212529; }
+.app-footer { flex: 0 0 auto; color: #fff; background: #6c757d; }
 button, input, select { font: inherit; }
 .detail-grid, .stop-times-scroll { font-size: .875rem; }
 .stop-times-scroll .font-monospace { font-size: .75rem; }

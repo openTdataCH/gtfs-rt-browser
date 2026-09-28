@@ -25,6 +25,11 @@ interface ParseState {
   readonly message: string;
 }
 
+interface AppBuildInfo {
+  readonly commit: string;
+  readonly builtAt: string;
+}
+
 interface FeedSource {
   readonly url: string;
   readonly error?: string;
@@ -85,6 +90,13 @@ export class AppComponent {
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
+  protected readonly buildInfo = readBuildInfo();
+  protected readonly buildCommitUrl = this.buildInfo
+    ? `https://github.com/openTdataCH/gtfs-rt-browser/commit/${this.buildInfo.commit}`
+    : undefined;
+  protected readonly buildTimeLabel = this.buildInfo
+    ? formatBuildTime(this.buildInfo.builtAt)
+    : undefined;
   protected readonly feedUrl = signal<string>(this.feedSource.url);
   protected readonly parseState = signal<ParseState>(emptyParseState('idle'));
   protected readonly metadata = signal<FeedMetadataDto | undefined>(undefined);
@@ -965,6 +977,29 @@ function emptyParseState(status: ParseState['status']): ParseState {
 function localTimeLabel(timestamp: number): string {
   const now = new Date(timestamp);
   return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function formatBuildTime(timestamp: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Zurich',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    timeZoneName: 'short'
+  }).formatToParts(new Date(timestamp));
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((candidate) => candidate.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')} ${part('timeZoneName')}`;
+}
+
+function readBuildInfo(): AppBuildInfo | undefined {
+  const value = window.__GTFS_RT_BUILD_INFO__;
+  return value?.commit && value.builtAt ? value : undefined;
+}
+
+declare global {
+  interface Window {
+    __GTFS_RT_BUILD_INFO__?: AppBuildInfo;
+  }
 }
 
 function activeFromQuery(value: string | null): boolean {
