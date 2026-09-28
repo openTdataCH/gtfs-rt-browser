@@ -78,8 +78,9 @@ export class AppComponent {
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
   private readonly serviceCalendarScroll = viewChild<ElementRef<HTMLDivElement>>('serviceCalendarScroll');
+  private readonly initialQuery = new URLSearchParams(window.location.search);
   private readonly feedSource = feedSourceFromQuery(window.location.search);
-  private pendingAgency = new URLSearchParams(window.location.search).get('agency')?.trim() || undefined;
+  private pendingAgency = this.initialQuery.get('agency')?.trim() || undefined;
   private feedSubscription?: Subscription;
   private startedAt = 0;
 
@@ -114,12 +115,12 @@ export class AppComponent {
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
-  protected readonly searchTerm = signal(new URLSearchParams(window.location.search).get('q') ?? '');
+  protected readonly searchTerm = signal(this.initialQuery.get('q') ?? '');
   protected readonly agencyFilter = signal('');
   protected readonly agencySort = signal<'name' | 'count'>('count');
-  protected readonly routeTypeFilter = signal('');
-  protected readonly relationshipFilter = signal('');
-  protected readonly activeTripsOnly = signal(false);
+  protected readonly routeTypeFilter = signal(routeTypeFromQuery(this.initialQuery.get('route_type')));
+  protected readonly relationshipFilter = signal(statusFromQuery(this.initialQuery.get('status')));
+  protected readonly activeTripsOnly = signal(activeFromQuery(this.initialQuery.get('active')));
   protected readonly showStaticOnlyTrips = signal(false);
   protected readonly groupByRouteShortName = signal(false);
   protected readonly expandedRouteShortNames = signal<ReadonlySet<string>>(new Set());
@@ -532,11 +533,11 @@ export class AppComponent {
     this.activeView.set(view);
     this.agencyFilter.set('');
     this.showStaticOnlyTrips.set(false);
-    const url = new URL(window.location.href);
-    url.searchParams.delete('agency');
-    window.history.replaceState(window.history.state, '', url);
+    this.setQueryParam('agency', '');
     this.routeTypeFilter.set('');
+    this.setQueryParam('route_type', '');
     this.activeTripsOnly.set(false);
+    this.setQueryParam('active', '');
     this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
     this.selectedId.set(this.filteredItems()[0]?.id);
@@ -579,10 +580,7 @@ export class AppComponent {
   protected updateSearch(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.searchTerm.set(value);
-    const url = new URL(window.location.href);
-    if (value) url.searchParams.set('q', value);
-    else url.searchParams.delete('q');
-    window.history.replaceState(window.history.state, '', url);
+    this.setQueryParam('q', value);
   }
   protected setAgencySort(sort: 'name' | 'count'): void {
     this.agencySort.set(sort);
@@ -594,12 +592,7 @@ export class AppComponent {
     this.agencyFilter.set(agency);
     if (!agency) this.showStaticOnlyTrips.set(false);
     this.pendingAgency = undefined;
-    if (updateUrl) {
-      const url = new URL(window.location.href);
-      if (agency) url.searchParams.set('agency', agency);
-      else url.searchParams.delete('agency');
-      window.history.replaceState(window.history.state, '', url);
-    }
+    if (updateUrl) this.setQueryParam('agency', agency);
     this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
     this.selectedId.set(this.timeline().rows[0]?.item.id);
@@ -614,19 +607,31 @@ export class AppComponent {
     if (match) this.applyAgencyFilter(match.agencyId, false);
   }
   protected updateRouteType(event: Event): void {
-    this.routeTypeFilter.set((event.target as HTMLSelectElement).value);
+    const value = (event.target as HTMLSelectElement).value;
+    this.routeTypeFilter.set(value);
+    this.setQueryParam('route_type', /^\d+$/.test(value) ? value : '');
     this.selectedId.set(this.timeline().rows[0]?.item.id);
   }
   protected updateRelationship(event: Event): void {
-    this.relationshipFilter.set((event.target as HTMLSelectElement).value);
+    const value = (event.target as HTMLSelectElement).value;
+    this.relationshipFilter.set(value);
+    this.setQueryParam('status', value);
     const first = this.activeView() === 'timeline'
       ? this.timeline().rows[0]?.item
       : this.filteredItems()[0];
     this.selectedId.set(first?.id);
   }
   protected updateActiveTripsOnly(event: Event): void {
-    this.activeTripsOnly.set((event.target as HTMLInputElement).checked);
+    const checked = (event.target as HTMLInputElement).checked;
+    this.activeTripsOnly.set(checked);
+    this.setQueryParam('active', checked ? 'yes' : '');
     this.selectedId.set(this.timeline().rows[0]?.item.id);
+  }
+  private setQueryParam(name: string, value: string): void {
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set(name, value);
+    else url.searchParams.delete(name);
+    window.history.replaceState(window.history.state, '', url);
   }
   protected updateShowStaticOnlyTrips(event: Event): void {
     this.showStaticOnlyTrips.set((event.target as HTMLInputElement).checked && this.canShowStaticOnlyTrips());
@@ -960,6 +965,22 @@ function emptyParseState(status: ParseState['status']): ParseState {
 function localTimeLabel(timestamp: number): string {
   const now = new Date(timestamp);
   return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function activeFromQuery(value: string | null): boolean {
+  return value !== null && ['yes', '1', 'true'].includes(value.trim().toLowerCase());
+}
+
+function routeTypeFromQuery(value: string | null): string {
+  if (!value || !/^\d+$/.test(value)) return '';
+  const routeType = Number(value);
+  return Number.isSafeInteger(routeType) ? String(routeType) : '';
+}
+
+function statusFromQuery(value: string | null): string {
+  const status = value?.trim().toUpperCase() ?? '';
+  return ['SCHEDULED', 'ADDED', 'UNSCHEDULED', 'CANCELED', 'REPLACEMENT', 'DUPLICATED', 'UNKNOWN'].includes(status)
+    ? status : '';
 }
 
 function feedSourceFromQuery(search: string): FeedSource {
