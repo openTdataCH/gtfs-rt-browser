@@ -1,4 +1,4 @@
-import { ScrollingModule } from '@angular/cdk/scrolling';
+import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -83,6 +83,7 @@ export class AppComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly browserNow = signal(Date.now());
   private readonly timelineScroll = viewChild<ElementRef<HTMLDivElement>>('timelineScroll');
+  private readonly messageViewport = viewChild<CdkVirtualScrollViewport>('messageViewport');
   private readonly serviceCalendarScroll = viewChild<ElementRef<HTMLDivElement>>('serviceCalendarScroll');
   private readonly stopTimesScroll = viewChild<ElementRef<HTMLDivElement>>('stopTimesScroll');
   private readonly initialQuery = new URLSearchParams(window.location.search);
@@ -622,6 +623,7 @@ export class AppComponent {
     const value = (event.target as HTMLInputElement).value;
     this.searchTerm.set(value);
     this.setQueryParam('q', value);
+    this.resetListAfterFilterChange();
   }
   protected setAgencySort(sort: 'name' | 'count'): void {
     this.agencySort.set(sort);
@@ -636,7 +638,7 @@ export class AppComponent {
     if (updateUrl) this.setQueryParam('agency', agency);
     this.groupByRouteShortName.set(false);
     this.expandedRouteShortNames.set(new Set());
-    this.selectedId.set(this.timeline().rows[0]?.item.id);
+    this.resetListAfterFilterChange();
   }
   private resolveUrlAgency(): void {
     const requested = this.pendingAgency;
@@ -651,22 +653,19 @@ export class AppComponent {
     const value = (event.target as HTMLSelectElement).value;
     this.routeTypeFilter.set(value);
     this.setQueryParam('route_type', /^\d+$/.test(value) ? value : '');
-    this.selectedId.set(this.timeline().rows[0]?.item.id);
+    this.resetListAfterFilterChange();
   }
   protected updateRelationship(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
     this.relationshipFilter.set(value);
     this.setQueryParam('status', value);
-    const first = this.activeView() === 'timeline'
-      ? this.timeline().rows[0]?.item
-      : this.filteredItems()[0];
-    this.selectedId.set(first?.id);
+    this.resetListAfterFilterChange();
   }
   protected updateActiveTripsOnly(event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     this.activeTripsOnly.set(checked);
     this.setQueryParam('active', checked ? 'yes' : '');
-    this.selectedId.set(this.timeline().rows[0]?.item.id);
+    this.resetListAfterFilterChange();
   }
   private setQueryParam(name: string, value: string): void {
     const url = new URL(window.location.href);
@@ -676,14 +675,26 @@ export class AppComponent {
   }
   protected updateShowStaticOnlyTrips(event: Event): void {
     this.showStaticOnlyTrips.set((event.target as HTMLInputElement).checked && this.canShowStaticOnlyTrips());
-    this.selectedId.set(this.timeline().rows[0]?.item.id);
+    this.resetListAfterFilterChange();
   }
   protected updateGroupByRouteShortName(event: Event): void {
     const checked = (event.target as HTMLInputElement).checked && this.canGroupByRouteShortName();
     this.groupByRouteShortName.set(checked);
     const firstGroup = this.timelineGroups()[0];
     this.expandedRouteShortNames.set(checked && firstGroup ? new Set([firstGroup.name]) : new Set());
-    this.selectedId.set(firstGroup?.rows[0]?.item.id ?? this.timeline().rows[0]?.item.id);
+    this.resetListAfterFilterChange();
+  }
+  private resetListAfterFilterChange(): void {
+    window.clearTimeout(this.filterResetTimer);
+    this.filterResetTimer = window.setTimeout(() => {
+      const first = this.activeView() === 'timeline' && this.groupByRouteShortName() && this.canGroupByRouteShortName()
+        ? this.timelineGroups()[0]?.rows[0]?.item
+        : this.filteredItems()[0];
+      this.selectedId.set(first?.id);
+      this.timelineScroll()?.nativeElement.scrollTo({ top: 0 });
+      this.messageViewport()?.scrollToIndex(0);
+      this.filterResetTimer = undefined;
+    }, 200);
   }
   protected toggleRouteShortName(name: string): void {
     this.expandedRouteShortNames.update((current) => {

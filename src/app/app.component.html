@@ -297,7 +297,7 @@
             {{ filteredItems().length | number }} of {{ viewItems().length | number }} timeline or GO listing errors
             @if (metadata(); as feed) { · {{ feed.entityCount | number }} total feed entities }
           </div>
-          <cdk-virtual-scroll-viewport class="message-viewport flex-grow-1" [itemSize]="92" [minBufferPx]="552" [maxBufferPx]="1104">
+          <cdk-virtual-scroll-viewport #messageViewport class="message-viewport flex-grow-1" [itemSize]="92" [minBufferPx]="552" [maxBufferPx]="1104">
             <button *cdkVirtualFor="let item of filteredItems(); trackBy: trackById" type="button"
               class="message-row w-100 border-0 border-bottom bg-white text-start px-3 py-2"
               [class.selected]="selectedId() === item.id" (click)="select(item)">
