@@ -61,6 +61,10 @@ interface StopTableRow {
   readonly delay?: number;
   readonly isSkipped: boolean;
   readonly progressMinute?: number;
+  readonly arrivalMinute?: number;
+  readonly departureMinute?: number;
+  readonly longitude?: number;
+  readonly latitude?: number;
 }
 
 interface ServiceCalendarMonth {
@@ -90,6 +94,7 @@ export class AppComponent {
   private readonly feedSource = feedSourceFromQuery(window.location.search);
   private pendingAgency = this.initialQuery.get('agency')?.trim() || undefined;
   private feedSubscription?: Subscription;
+  private filterResetTimer?: number;
   private startedAt = 0;
 
   protected readonly title = 'GTFS-RT Browser';
@@ -333,7 +338,8 @@ export class AppComponent {
     const trip = this.selectedStaticTrip();
     const metadata = this.metadata();
     if (!item) return [];
-    if (!trip || !metadata) return item.stops.map((stop, index) => realtimeStopRow(stop, index, metadata?.feedDay));
+    if (!trip || !metadata) return item.stops.map((stop, index) =>
+      realtimeStopRow(stop, index, metadata?.feedDay, this.stopsById().get(stop.stopId)));
 
     const unmatchedRealtime = new Set(item.stops);
     const staticRows = parseStaticStopTimes(trip.stop_times_s).map((stop, index): StopTableRow => {
@@ -343,6 +349,7 @@ export class AppComponent {
         realtime?.dto.arrival, stop.arrival, item.dto.trip.startDate, metadata.feedDay);
       const departureDelay = eventDelay(
         realtime?.dto.departure, stop.departure, item.dto.trip.startDate, metadata.feedDay);
+      const location = this.stopsById().get(stop.stopId);
       return {
         key: `static:${index}:${stop.stopId}`,
         sequence: index + 1,
@@ -354,11 +361,17 @@ export class AppComponent {
         delay: departureDelay ?? arrivalDelay,
         isSkipped: realtime?.isSkipped ?? false,
         progressMinute: stopProgressMinute(realtime, stop.departure, stop.arrival,
-          item.dto.trip.startDate, metadata.feedDay)
+          item.dto.trip.startDate, metadata.feedDay),
+        arrivalMinute: effectiveStopMinute(realtime?.dto.arrival, stop.arrival,
+          item.dto.trip.startDate, metadata.feedDay),
+        departureMinute: effectiveStopMinute(realtime?.dto.departure, stop.departure,
+          item.dto.trip.startDate, metadata.feedDay),
+        longitude: location?.stop_lon,
+        latitude: location?.stop_lat
       };
     });
     const unmatchedRows = [...unmatchedRealtime].map((stop, index) =>
-      realtimeStopRow(stop, staticRows.length + index, metadata.feedDay));
+      realtimeStopRow(stop, staticRows.length + index, metadata.feedDay, this.stopsById().get(stop.stopId)));
     return [...staticRows, ...unmatchedRows];
   });
   protected readonly stopProgress = computed(() => {
@@ -372,6 +385,11 @@ export class AppComponent {
       passedIndexes: new Set(rows.flatMap((row, index) =>
         row.progressMinute !== undefined && row.progressMinute < now ? [index] : []))
     };
+  });
+  protected readonly selectedMapUrl = computed(() => {
+    const item = this.selected();
+    if (!item || this.timelineStatus() !== 'ready' || !this.isActiveAtNow(item)) return undefined;
+    return approximateTripMapUrl(this.stopTableRows(), this.nowDayMinute());
   });
 
   protected readonly ojpSearchUrl = computed(() => {
@@ -468,6 +486,7 @@ export class AppComponent {
       this.browserNow.set(now);
     }, 30_000);
     this.destroyRef.onDestroy(() => window.clearInterval(clock));
+    this.destroyRef.onDestroy(() => window.clearTimeout(this.filterResetTimer));
     effect(() => {
       const item = this.selected();
       const gtfsDay = this.metadata()?.feedVersion;
@@ -570,8 +589,12 @@ export class AppComponent {
     });
   }
 
-  protected select(item: TripUpdate): void { this.selectedId.set(item.id); }
+  protected select(item: TripUpdate): void {
+    window.clearTimeout(this.filterResetTimer);
+    this.selectedId.set(item.id);
+  }
   protected selectView(view: 'timeline' | 'errors'): void {
+    window.clearTimeout(this.filterResetTimer);
     this.activeView.set(view);
     this.agencyFilter.set('');
     this.showStaticOnlyTrips.set(false);
@@ -871,7 +894,7 @@ function swissSearchDateTime(timestamp: number): { day: string; time: string } {
   };
 }
 
-function realtimeStopRow(stop: StopTimeUpdate, index: number, feedDay?: string): StopTableRow {
+function realtimeStopRow(stop: StopTimeUpdate, index: number, feedDay?: string, location?: StopJSON): StopTableRow {
   return {
     key: `realtime:${index}:${stop.stopId}`,
     sequence: stop.dto.stopSequence,
@@ -881,8 +904,25 @@ function realtimeStopRow(stop: StopTimeUpdate, index: number, feedDay?: string):
     departure: formatEpochTime(stop.dto.departure?.time),
     delay: stop.effectiveDelay,
     isSkipped: stop.isSkipped,
-    progressMinute: feedDay ? stopProgressMinute(stop, undefined, undefined, undefined, feedDay) : undefined
+    progressMinute: feedDay ? stopProgressMinute(stop, undefined, undefined, undefined, feedDay) : undefined,
+    arrivalMinute: feedDay && stop.dto.arrival?.time !== undefined
+      ? swissDayMinute(stop.dto.arrival.time, feedDay) : undefined,
+    departureMinute: feedDay && stop.dto.departure?.time !== undefined
+      ? swissDayMinute(stop.dto.departure.time, feedDay) : undefined,
+    longitude: location?.stop_lon,
+    latitude: location?.stop_lat
   };
+}
+
+function effectiveStopMinute(
+  event: { readonly delay?: number; readonly time?: number } | undefined,
+  scheduledTime: string | undefined,
+  startDate: string | undefined,
+  feedDay: string
+): number | undefined {
+  if (event?.time !== undefined) return swissDayMinute(event.time, feedDay);
+  const scheduled = scheduledTime ? scheduledDayMinute(scheduledTime, startDate, feedDay) : undefined;
+  return scheduled === undefined ? undefined : scheduled + (event?.delay ?? 0) / 60;
 }
 
 function stopProgressMinute(
@@ -892,11 +932,9 @@ function stopProgressMinute(
   startDate: string | undefined,
   feedDay: string
 ): number | undefined {
-  const event = realtime?.dto.departure ?? realtime?.dto.arrival;
-  if (event?.time !== undefined) return swissDayMinute(event.time, feedDay);
-  const scheduled = scheduledDeparture ?? scheduledArrival;
-  const scheduledMinute = scheduled ? scheduledDayMinute(scheduled, startDate, feedDay) : undefined;
-  return scheduledMinute === undefined ? undefined : scheduledMinute + (event?.delay ?? 0) / 60;
+  return effectiveStopMinute(realtime?.dto.departure ?? realtime?.dto.arrival,
+    scheduledDeparture ?? scheduledArrival, startDate, feedDay);
+}
 
 function approximateTripMapUrl(rows: readonly StopTableRow[], now: number): string | undefined {
   const stops = rows.filter((row) => row.longitude !== undefined && row.latitude !== undefined

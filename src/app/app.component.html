@@ -433,6 +433,10 @@
               <div class="d-flex align-items-center mb-2">
                 <h3 class="h6 mb-0">Stop times</h3>
                 <span class="badge text-bg-secondary ms-2">{{ stopTableRows().length | number }}</span>
+                @if (selectedMapUrl(); as mapUrl) {
+                  <a class="ms-auto small" [href]="mapUrl" target="_blank" rel="noopener noreferrer"
+                    title="Approximate position interpolated between stops">Map ↗</a>
+                }
               </div>
               @if (selectedStaticTripState().status === 'error') {
                 <div class="alert alert-warning py-2">Static stop times unavailable: {{ selectedStaticTripState().message }}</div>
