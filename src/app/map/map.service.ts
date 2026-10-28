@@ -1,24 +1,13 @@
 import { Injectable } from '@angular/core';
-import type { FeatureCollection, LineString, Point } from 'geojson';
-import type { GeoJSONSource, Map as LibreMap } from 'maplibre-gl';
-
-export interface MapStop {
-  readonly sequence?: number;
-  readonly longitude?: number;
-  readonly latitude?: number;
-  readonly name?: string;
-  readonly stopId: string;
-}
+import type { Map as LibreMap, Popup } from 'maplibre-gl';
 
 @Injectable()
 export class MapService {
   private map?: LibreMap;
   private resizeObserver?: ResizeObserver;
   private generation = 0;
-  private stops: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] };
-  private route: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] };
 
-  async init(container: HTMLElement, onReady: () => void, onError: () => void): Promise<void> {
+  async init(container: HTMLElement, onReady: () => void, onError: () => void): Promise<{ map: LibreMap; Popup: typeof Popup } | undefined> {
     this.destroy();
     const generation = this.generation;
     // Match the reference app's lazy import, including its CommonJS default export.
@@ -37,79 +26,9 @@ export class MapService {
     map.addControl(new mapgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     map.on('error', onError);
     map.on('idle', onReady);
-    map.on('load', () => {
-      map.addSource('trip-route', { type: 'geojson', data: this.route });
-      map.addLayer({
-        id: 'trip-route', type: 'line', source: 'trip-route',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#357abd', 'line-width': 3, 'line-opacity': 0.7 }
-      });
-      map.addSource('trip-stops', { type: 'geojson', data: this.stops });
-      map.addLayer({
-        id: 'trip-stops', type: 'circle', source: 'trip-stops',
-        paint: { 'circle-radius': 5, 'circle-color': '#357abd', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 }
-      });
-      map.addLayer({
-        id: 'trip-stop-numbers', type: 'symbol', source: 'trip-stops',
-        layout: {
-          'text-field': ['to-string', ['get', 'sequence']],
-          'text-font': ['Noto Sans Regular'],
-          'text-size': 14,
-          'text-anchor': 'top-left',
-          'text-offset': [0.35, 0.35],
-          'text-allow-overlap': true,
-          'text-ignore-placement': true
-        },
-        paint: { 'text-color': '#2764a6', 'text-halo-color': '#fff', 'text-halo-width': 2 }
-      });
-      map.on('click', 'trip-stops', event => {
-        const feature = event.features?.[0];
-        if (!feature || feature.geometry.type !== 'Point') return;
-        const label = document.createElement('div');
-        label.textContent = String(feature.properties?.['name'] || feature.properties?.['stopId'] || 'Stop');
-        new mapgl.Popup().setLngLat(feature.geometry.coordinates as [number, number]).setDOMContent(label).addTo(map);
-      });
-      map.on('mouseenter', 'trip-stops', () => { map.getCanvas().style.cursor = 'pointer'; });
-      map.on('mouseleave', 'trip-stops', () => { map.getCanvas().style.cursor = ''; });
-      this.fitStops();
-    });
     this.resizeObserver = new ResizeObserver(() => map.resize());
     this.resizeObserver.observe(container);
-  }
-
-  setStops(stops: readonly MapStop[]): void {
-    this.stops = {
-      type: 'FeatureCollection',
-      features: stops.flatMap((stop, index) => {
-        const { longitude, latitude } = stop;
-        if (longitude === undefined || latitude === undefined
-          || !Number.isFinite(longitude) || !Number.isFinite(latitude)
-          || Math.abs(longitude) > 180 || Math.abs(latitude) > 85) return [];
-        return [{ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [longitude, latitude] },
-          properties: { name: stop.name, stopId: stop.stopId, sequence: stop.sequence ?? index + 1 } }];
-      })
-    };
-    const coordinates = this.stops.features.map(feature => feature.geometry.coordinates);
-    this.route = {
-      type: 'FeatureCollection',
-      features: coordinates.length < 2 ? [] : [{
-        type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates }
-      }]
-    };
-    this.map?.getSource<GeoJSONSource>('trip-route')?.setData(this.route);
-    this.map?.getSource<GeoJSONSource>('trip-stops')?.setData(this.stops);
-    this.fitStops();
-  }
-
-  private fitStops(): void {
-    const coordinates = this.stops.features.map(feature => feature.geometry.coordinates);
-    if (!coordinates.length) return;
-    const longitudes = coordinates.map(point => point[0]);
-    const latitudes = coordinates.map(point => point[1]);
-    this.map?.fitBounds([
-      [Math.min(...longitudes), Math.min(...latitudes)],
-      [Math.max(...longitudes), Math.max(...latitudes)]
-    ], { padding: 35, maxZoom: 14, duration: 0 });
+    return { map, Popup: mapgl.Popup };
   }
 
   destroy(): void {
