@@ -399,11 +399,21 @@
             </dl>
             @if (serviceCalendarMonths().length) {
               <section class="service-calendar mt-4" aria-label="Trip service calendar">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                  <h3 class="h6 mb-0">Service days <span class="badge text-bg-secondary ms-1">{{ serviceCalendarActiveDays() | number }}</span></h3>
-                  <span class="small text-secondary">Scroll for more months →</span>
+                <div class="d-flex align-items-center justify-content-between" [class.mb-2]="!serviceCalendarCollapsed()">
+                  <h3 class="h6 mb-0">
+                    <button type="button" class="btn p-0 border-0 text-body fw-semibold"
+                      [attr.aria-expanded]="!serviceCalendarCollapsed()" aria-controls="service-calendar-months"
+                      (click)="serviceCalendarCollapsed.set(!serviceCalendarCollapsed())">
+                      <span class="me-1" aria-hidden="true">{{ serviceCalendarCollapsed() ? '▸' : '▾' }}</span>
+                      Service days <span class="badge text-bg-secondary ms-1">{{ serviceCalendarActiveDays() | number }}</span>
+                    </button>
+                  </h3>
+                  @if (!serviceCalendarCollapsed()) {
+                    <span class="small text-secondary">Scroll for more months →</span>
+                  }
                 </div>
-                <div #serviceCalendarScroll class="service-calendar-scroll" tabindex="0" aria-label="Service months, scroll horizontally">
+                <div #serviceCalendarScroll id="service-calendar-months" class="service-calendar-scroll"
+                  [class.d-none]="serviceCalendarCollapsed()" tabindex="0" aria-label="Service months, scroll horizontally">
                   @for (month of serviceCalendarMonths(); track month.key) {
                     <div class="service-month" [attr.data-month]="month.key">
                       <div class="service-month-title">{{ month.label }}</div>

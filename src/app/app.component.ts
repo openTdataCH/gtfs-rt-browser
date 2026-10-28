@@ -325,6 +325,7 @@ export class AppComponent {
     return item && gtfsDay && state.key === `${gtfsDay}|${item.tripId}` ? state : { status: 'idle' };
   });
   protected readonly selectedStaticTrip = computed(() => this.selectedStaticTripState().detail?.result.trip);
+  protected readonly serviceCalendarCollapsed = signal(false);
   protected readonly serviceCalendarMonths = computed(() => {
     const calendar = this.selectedStaticTripState().detail?.result.calendar;
     if (!calendar) return [];
