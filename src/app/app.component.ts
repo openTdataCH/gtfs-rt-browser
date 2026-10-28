@@ -315,7 +315,7 @@ export class AppComponent {
   protected readonly filteredRealtimeCount = computed(() =>
     this.filteredItems().filter((item) => !item.isStaticOnly).length);
 
-  protected readonly selected = computed(() => {
+  protected readonly selected = computed<TripUpdate | undefined>(() => {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });

@@ -1,8 +1,10 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, effect, ElementRef, inject, input, signal, viewChild } from '@angular/core';
 import type { FeatureCollection, LineString, Point } from 'geojson';
 import type { GeoJSONSource, Map as LibreMap, Popup } from 'maplibre-gl';
+import { APP_URLS } from '../config';
 import { MapService } from './map.service';
 import type { MapStop } from './map-stop.model';
+import { parseTripShape } from './trip-shape';
 
 @Component({
   selector: 'app-map',
@@ -31,6 +33,7 @@ import type { MapStop } from './map-stop.model';
 })
 export class MapComponent {
   readonly stops = input<readonly MapStop[]>([]);
+  readonly tripId = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
   private readonly mapService = inject(MapService);
   private readonly container = viewChild.required<ElementRef<HTMLElement>>('container');
@@ -39,10 +42,22 @@ export class MapComponent {
   private popup?: Popup;
   private stopData: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] };
   private routeData: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] };
+  private readonly tripShape = signal<{ tripId: string; data: FeatureCollection<LineString> } | undefined>(undefined);
   private loadTimeout?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    effect(() => this.setStops(this.stops()));
+    effect(onCleanup => {
+      const tripId = this.tripId()?.trim();
+      this.tripShape.set(undefined);
+      if (!tripId || tripId === '—') return;
+      const controller = new AbortController();
+      onCleanup(() => controller.abort());
+      void this.loadTripShape(tripId, controller.signal);
+    });
+    effect(() => {
+      const shape = this.tripShape();
+      this.setStops(this.stops(), shape && shape.tripId === this.tripId()?.trim() ? shape.data : undefined);
+    });
     afterNextRender(() => void this.initialize());
     this.destroyRef.onDestroy(() => {
       clearTimeout(this.loadTimeout);
@@ -115,7 +130,18 @@ export class MapComponent {
     this.fitStops();
   }
 
-  private setStops(stops: readonly MapStop[]): void {
+  private async loadTripShape(tripId: string, signal: AbortSignal): Promise<void> {
+    try {
+      const response = await fetch(`${APP_URLS.gtfsChTrips}/${encodeURIComponent(tripId)}/shape`, { signal });
+      if (!response.ok) return;
+      const data = parseTripShape(await response.json());
+      if (!signal.aborted) this.tripShape.set({ tripId, data });
+    } catch {
+      // Missing shapes, invalid responses, and network errors retain the stop-to-stop line.
+    }
+  }
+
+  private setStops(stops: readonly MapStop[], shape?: FeatureCollection<LineString>): void {
     this.popup?.remove();
     this.popup = undefined;
     this.stopData = {
@@ -130,7 +156,7 @@ export class MapComponent {
       })
     };
     const coordinates = this.stopData.features.map(feature => feature.geometry.coordinates);
-    this.routeData = {
+    this.routeData = shape ?? {
       type: 'FeatureCollection',
       features: coordinates.length < 2 ? [] : [{
         type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates }
@@ -142,13 +168,22 @@ export class MapComponent {
   }
 
   private fitStops(): void {
-    const coordinates = this.stopData.features.map(feature => feature.geometry.coordinates);
-    if (!coordinates.length) return;
-    const longitudes = coordinates.map(point => point[0]);
-    const latitudes = coordinates.map(point => point[1]);
+    let west = Infinity;
+    let south = Infinity;
+    let east = -Infinity;
+    let north = -Infinity;
+    const extend = (point: number[]) => {
+      west = Math.min(west, point[0]);
+      south = Math.min(south, point[1]);
+      east = Math.max(east, point[0]);
+      north = Math.max(north, point[1]);
+    };
+    this.stopData.features.forEach(feature => extend(feature.geometry.coordinates));
+    this.routeData.features.forEach(feature => feature.geometry.coordinates.forEach(extend));
+    if (!Number.isFinite(west)) return;
     this.libreMap?.fitBounds([
-      [Math.min(...longitudes), Math.min(...latitudes)],
-      [Math.max(...longitudes), Math.max(...latitudes)]
+      [west, south],
+      [east, north]
     ], { padding: 35, maxZoom: 14, duration: 0 });
   }
 }
