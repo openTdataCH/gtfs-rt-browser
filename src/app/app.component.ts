@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, e
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { APP_URLS } from './config';
+import { MapComponent } from './map/map.component';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
@@ -76,7 +77,7 @@ interface ServiceCalendarMonth {
 
 @Component({
   selector: 'app-root',
-  imports: [ScrollingModule, DatePipe, DecimalPipe],
+  imports: [ScrollingModule, DatePipe, DecimalPipe, MapComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
