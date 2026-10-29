@@ -26,9 +26,3 @@ For example, `?agency=ch:1:sboid:100001&active=yes&route_type=101&status=SCHEDUL
 selects an agency and applies the other filters. The displayed **Now** time is
 not a URL parameter; it starts at the OS time and can be changed in the UI.
 
-## Architecture
-
-- `dto/` contains structured-clone-safe feed data.
-- `models/` adds derived delay, status, search, and date behavior.
-- `gtfs-rt-parser.worker.ts` decodes protobuf off the UI thread and emits
-  `TripUpdate` DTOs in batches of 250.

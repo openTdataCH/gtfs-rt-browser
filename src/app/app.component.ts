@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, e
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { APP_URLS } from './config';
+import { MapComponent } from './map/map.component';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
@@ -76,7 +77,7 @@ interface ServiceCalendarMonth {
 
 @Component({
   selector: 'app-root',
-  imports: [ScrollingModule, DatePipe, DecimalPipe],
+  imports: [ScrollingModule, DatePipe, DecimalPipe, MapComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -314,7 +315,7 @@ export class AppComponent {
   protected readonly filteredRealtimeCount = computed(() =>
     this.filteredItems().filter((item) => !item.isStaticOnly).length);
 
-  protected readonly selected = computed(() => {
+  protected readonly selected = computed<TripUpdate | undefined>(() => {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });
@@ -325,6 +326,7 @@ export class AppComponent {
     return item && gtfsDay && state.key === `${gtfsDay}|${item.tripId}` ? state : { status: 'idle' };
   });
   protected readonly selectedStaticTrip = computed(() => this.selectedStaticTripState().detail?.result.trip);
+  protected readonly serviceCalendarCollapsed = signal(false);
   protected readonly serviceCalendarMonths = computed(() => {
     const calendar = this.selectedStaticTripState().detail?.result.calendar;
     if (!calendar) return [];
