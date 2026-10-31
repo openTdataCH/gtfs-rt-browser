@@ -13,6 +13,13 @@ import { parseTripShape } from './trip-shape';
   template: `
     <section class="trip-map" aria-label="Selected trip stops map">
       <div #container class="map-container" aria-label="Interactive map"></div>
+      <fieldset class="layer-manager">
+        <legend>Layers</legend>
+        <label>
+          <input type="checkbox" [checked]="shapesVisible()" (change)="updateShapesVisibility($event)">
+          <span>GTFS-s Shapes</span>
+        </label>
+      </fieldset>
       @if (graphError()) {
         <div class="graph-status small" role="status">The shapes graph could not be loaded.</div>
       }
@@ -30,6 +37,13 @@ import { parseTripShape } from './trip-shape';
     :host { display: block; width: 100%; height: 100%; }
     .trip-map { position: relative; height: 100%; overflow: hidden; }
     .map-container { width: 100%; height: 100%; }
+    .layer-manager { position: absolute; top: 10px; left: 10px; margin: 0;
+      padding: .5rem .75rem; border: 0; border-radius: 4px; background: #fff;
+      box-shadow: 0 0 0 2px #0000001a; font-size: .8rem; }
+    .layer-manager legend { float: none; width: auto; margin: 0 0 .25rem;
+      font-size: inherit; font-weight: 600; }
+    .layer-manager label { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
+    .layer-manager input { margin: 0; accent-color: #357abd; }
     .graph-status { position: absolute; bottom: 2rem; left: .5rem;
       padding: .25rem .5rem; border-radius: .25rem; background: #ffffffed; }
     .map-status { position: absolute; inset: 0; display: flex; align-items: center;
@@ -42,6 +56,7 @@ export class MapComponent {
   readonly tripId = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly graphError = signal(false);
+  protected readonly shapesVisible = signal(true);
   private readonly mapService = inject(MapService);
   private readonly container = viewChild.required<ElementRef<HTMLElement>>('container');
   private readonly destroyRef = inject(DestroyRef);
@@ -104,11 +119,22 @@ export class MapComponent {
     }
   }
 
+  protected updateShapesVisibility(event: Event): void {
+    const visible = (event.target as HTMLInputElement).checked;
+    this.shapesVisible.set(visible);
+    if (this.libreMap?.getLayer('shapes-graph')) {
+      this.libreMap.setLayoutProperty('shapes-graph', 'visibility', visible ? 'visible' : 'none');
+    }
+  }
+
   private addLayers(map: LibreMap, PopupType: typeof Popup): void {
     map.addSource('shapes-graph', { type: 'vector', url: `pmtiles://${APP_URLS.shapesGraph}` });
     map.addLayer({
       id: 'shapes-graph', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      layout: {
+        'line-join': 'round', 'line-cap': 'round',
+        visibility: this.shapesVisible() ? 'visible' : 'none'
+      },
       paint: {
         'line-color': '#7b8794',
         'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 14, 2],
