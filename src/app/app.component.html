@@ -58,6 +58,7 @@
             [attr.aria-label]="timelineControlsExpanded() ? 'Hide controls' : 'Show controls'"
             [title]="timelineControlsExpanded() ? 'Hide controls' : 'Show controls'">
             <span aria-hidden="true">{{ timelineControlsExpanded() ? '▴' : '▾' }}</span>
+            <span>{{ timelineControlsExpanded() ? 'Hide controls' : 'Show controls' }}</span>
           </button>
           <div id="timeline-controls" class="timeline-controls" [class.controls-collapsed]="!timelineControlsExpanded()">
           <div class="timeline-summary small text-secondary border-bottom bg-white px-3 py-2">
