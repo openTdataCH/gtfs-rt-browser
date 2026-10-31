@@ -17,7 +17,7 @@ import { parseTripShape } from './trip-shape';
         <div class="layer-manager-heading">Layers</div>
         <label>
           <input type="checkbox" [checked]="resultShapesVisible()" (change)="updateResultShapesVisibility($event)">
-          <span>GTFS-RT Shapes</span>
+          <span>Filtered Trips</span>
         </label>
         <label>
           <input type="checkbox" [checked]="shapesVisible()" (change)="updateShapesVisibility($event)">
