@@ -19,6 +19,10 @@ import { parseTripShape } from './trip-shape';
           <input type="checkbox" [checked]="shapesVisible()" (change)="updateShapesVisibility($event)">
           <span>GTFS-s Shapes</span>
         </label>
+        <label>
+          <input type="checkbox" [checked]="backgroundMapsVisible()" (change)="updateBackgroundMapsVisibility($event)">
+          <span>Background Map</span>
+        </label>
       </fieldset>
       @if (graphError()) {
         <div class="graph-status small" role="status">The shapes graph could not be loaded.</div>
@@ -43,6 +47,7 @@ import { parseTripShape } from './trip-shape';
     .layer-manager legend { float: none; width: auto; margin: 0 0 .25rem;
       font-size: inherit; font-weight: 600; }
     .layer-manager label { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
+    .layer-manager label + label { margin-top: .25rem; }
     .layer-manager input { margin: 0; accent-color: #357abd; }
     .graph-status { position: absolute; bottom: 2rem; left: .5rem;
       padding: .25rem .5rem; border-radius: .25rem; background: #ffffffed; }
@@ -57,6 +62,7 @@ export class MapComponent {
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly graphError = signal(false);
   protected readonly shapesVisible = signal(true);
+  protected readonly backgroundMapsVisible = signal(true);
   private readonly mapService = inject(MapService);
   private readonly container = viewChild.required<ElementRef<HTMLElement>>('container');
   private readonly destroyRef = inject(DestroyRef);
@@ -127,7 +133,34 @@ export class MapComponent {
     }
   }
 
+  protected updateBackgroundMapsVisibility(event: Event): void {
+    const visible = (event.target as HTMLInputElement).checked;
+    this.backgroundMapsVisible.set(visible);
+    if (this.libreMap?.getLayer('background-mask')) {
+      this.libreMap.setLayoutProperty('background-mask', 'visibility', visible ? 'none' : 'visible');
+    }
+  }
+
   private addLayers(map: LibreMap, PopupType: typeof Popup): void {
+    const firstLabelLayerId = map.getStyle().layers.find(layer => layer.type === 'symbol')?.id;
+    map.addSource('background-mask', {
+      type: 'geojson',
+      data: {
+        type: 'Feature', properties: {},
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[
+            [-180, -85.051129], [180, -85.051129],
+            [180, 85.051129], [-180, 85.051129], [-180, -85.051129]
+          ]]
+        }
+      }
+    });
+    map.addLayer({
+      id: 'background-mask', type: 'fill', source: 'background-mask',
+      layout: { visibility: this.backgroundMapsVisible() ? 'none' : 'visible' },
+      paint: { 'fill-color': '#fff', 'fill-opacity': 1, 'fill-antialias': false }
+    }, firstLabelLayerId);
     map.addSource('shapes-graph', { type: 'vector', url: `pmtiles://${APP_URLS.shapesGraph}` });
     map.addLayer({
       id: 'shapes-graph', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
