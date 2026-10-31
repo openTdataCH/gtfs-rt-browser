@@ -10,6 +10,7 @@ export const APP_URLS = {
   gtfsDayTrips: 'https://tools.opentransportdata.swiss/gtfs-query/query_day_trips',
   gtfsChRoutes: 'https://gtfs.ch/routes',
   gtfsChTrips: 'https://api.gtfs.ch/v1/trips',
+  shapesGraph: 'https://api.gtfs.ch/v1/shapes.pmtiles',
   atlasBusinessOrganisations:
     'https://atlas.app.sbb.ch/business-organisation-directory/business-organisations',
   businessOrganisations:
