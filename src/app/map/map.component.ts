@@ -16,6 +16,10 @@ import { parseTripShape } from './trip-shape';
       <div class="layer-manager" role="group" aria-label="Map layers">
         <div class="layer-manager-heading">Layers</div>
         <label>
+          <input type="checkbox" [checked]="selectedTripVisible()" (change)="updateSelectedTripVisibility($event)">
+          <span>Selected Trip</span>
+        </label>
+        <label>
           <input type="checkbox" [checked]="resultShapesVisible()" (change)="updateResultShapesVisibility($event)">
           <span>Filtered Trips</span>
         </label>
@@ -75,6 +79,7 @@ export class MapComponent {
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly graphError = signal(false);
   protected readonly shapesVisible = signal(true);
+  protected readonly selectedTripVisible = signal(true);
   protected readonly resultShapesVisible = signal(true);
   protected readonly backgroundMapsVisible = signal(true);
   private readonly mapService = inject(MapService);
@@ -139,6 +144,23 @@ export class MapComponent {
       if (this.destroyRef.destroyed) return;
       clearTimeout(this.loadTimeout);
       this.state.set('error');
+    }
+  }
+
+  protected updateSelectedTripVisibility(event: Event): void {
+    this.selectedTripVisible.set((event.target as HTMLInputElement).checked);
+    this.applySelectedTripVisibility();
+    if (!this.selectedTripVisible()) {
+      this.popup?.remove();
+      this.popup = undefined;
+    }
+  }
+
+  private applySelectedTripVisibility(): void {
+    for (const layerId of ['trip-route-casing', 'trip-route', 'trip-stops', 'trip-stop-numbers']) {
+      if (this.libreMap?.getLayer(layerId)) {
+        this.libreMap.setLayoutProperty(layerId, 'visibility', this.selectedTripVisible() ? 'visible' : 'none');
+      }
     }
   }
 
@@ -256,6 +278,7 @@ export class MapComponent {
       },
       paint: { 'text-color': '#2764a6', 'text-halo-color': '#fff', 'text-halo-width': 2 }
     });
+    this.applySelectedTripVisibility();
     map.on('click', 'trip-stops', event => {
       const feature = event.features?.[0];
       if (!feature || feature.geometry.type !== 'Point') return;
