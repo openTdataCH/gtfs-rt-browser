@@ -16,9 +16,18 @@ import { parseTripShape } from './trip-shape';
       <div class="layer-manager" role="group" aria-label="Map layers">
         <div class="layer-manager-heading">Layers</div>
         <label>
-          <input type="checkbox" [checked]="shapesVisible()" (change)="updateShapesVisibility($event)">
-          <span>GTFS-s Shapes</span>
+          <input type="checkbox" [checked]="resultShapesVisible()" (change)="updateResultShapesVisibility($event)">
+          <span>GTFS-RT Shapes</span>
         </label>
+        <label>
+          <input type="checkbox" [checked]="shapesVisible()" (change)="updateShapesVisibility($event)">
+          <span>GTFS-S Shapes</span>
+        </label>
+        @if (resultShapesStatus() === 'loading') {
+          <div class="layer-status text-secondary" role="status">Loading filtered trip shapes…</div>
+        } @else if (resultShapesStatus() === 'error') {
+          <div class="layer-status text-danger" role="status" [title]="resultShapesError() || ''">Filtered trip shapes unavailable.</div>
+        }
         <label>
           <input type="checkbox" [checked]="backgroundMapsVisible()" (change)="updateBackgroundMapsVisibility($event)">
           <span>Background Map</span>
@@ -49,6 +58,7 @@ import { parseTripShape } from './trip-shape';
     .layer-manager label { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
     .layer-manager label + label { margin-top: .25rem; }
     .layer-manager input { margin: 0; accent-color: #357abd; }
+    .layer-status { margin: .25rem 0; max-width: 13rem; font-size: .75rem; }
     .graph-status { position: absolute; bottom: 2rem; left: .5rem;
       padding: .25rem .5rem; border-radius: .25rem; background: #ffffffed; }
     .map-status { position: absolute; inset: 0; display: flex; align-items: center;
@@ -59,9 +69,13 @@ export class MapComponent {
   private readonly excludedBasemapLayerIds: readonly string[] = ['landcover_wood', 'park'];
   readonly stops = input<readonly MapStop[]>([]);
   readonly tripId = input<string>();
+  readonly resultEdgeIds = input<readonly number[]>([]);
+  readonly resultShapesStatus = input<'loading' | 'ready' | 'error'>('loading');
+  readonly resultShapesError = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly graphError = signal(false);
   protected readonly shapesVisible = signal(true);
+  protected readonly resultShapesVisible = signal(true);
   protected readonly backgroundMapsVisible = signal(true);
   private readonly mapService = inject(MapService);
   private readonly container = viewChild.required<ElementRef<HTMLElement>>('container');
@@ -72,8 +86,10 @@ export class MapComponent {
   private routeData: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] };
   private readonly tripShape = signal<{ tripId: string; data: FeatureCollection<LineString> } | undefined>(undefined);
   private loadTimeout?: ReturnType<typeof setTimeout>;
+  private appliedResultEdgeIds = new Set<number>();
 
   constructor() {
+    effect(() => this.updateResultShapeEdges(this.resultEdgeIds()));
     effect(onCleanup => {
       const tripId = this.tripId()?.trim();
       this.tripShape.set(undefined);
@@ -100,6 +116,7 @@ export class MapComponent {
     this.popup?.remove();
     this.popup = undefined;
     this.libreMap = undefined;
+    this.appliedResultEdgeIds.clear();
     this.state.set('loading');
     this.graphError.set(false);
     this.loadTimeout = setTimeout(() => this.state.set('error'), 20_000);
@@ -131,6 +148,29 @@ export class MapComponent {
     if (this.libreMap?.getLayer('shapes-graph')) {
       this.libreMap.setLayoutProperty('shapes-graph', 'visibility', visible ? 'visible' : 'none');
     }
+  }
+
+  protected updateResultShapesVisibility(event: Event): void {
+    const visible = (event.target as HTMLInputElement).checked;
+    this.resultShapesVisible.set(visible);
+    if (this.libreMap?.getLayer('result-shapes')) {
+      this.libreMap.setLayoutProperty('result-shapes', 'visibility', visible ? 'visible' : 'none');
+    }
+  }
+
+  private updateResultShapeEdges(edgeIds: readonly number[]): void {
+    const map = this.libreMap;
+    if (!map?.getSource('shapes-graph')) return;
+    const next = new Set(edgeIds);
+    for (const id of this.appliedResultEdgeIds) {
+      if (!next.has(id)) map.removeFeatureState({ source: 'shapes-graph', sourceLayer: 'trgraph', id }, 'inResults');
+    }
+    for (const id of next) {
+      if (!this.appliedResultEdgeIds.has(id)) {
+        map.setFeatureState({ source: 'shapes-graph', sourceLayer: 'trgraph', id }, { inResults: true });
+      }
+    }
+    this.appliedResultEdgeIds = next;
   }
 
   protected updateBackgroundMapsVisibility(event: Event): void {
@@ -174,6 +214,19 @@ export class MapComponent {
         'line-opacity': 0.5
       }
     });
+    map.addLayer({
+      id: 'result-shapes', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
+      layout: {
+        'line-join': 'round', 'line-cap': 'round',
+        visibility: this.resultShapesVisible() ? 'visible' : 'none'
+      },
+      paint: {
+        'line-color': '#e58b24',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 14, 3.5],
+        'line-opacity': ['case', ['boolean', ['feature-state', 'inResults'], false], 0.9, 0]
+      }
+    });
+    this.updateResultShapeEdges(this.resultEdgeIds());
     map.addSource('trip-route', { type: 'geojson', data: this.routeData });
     map.addLayer({
       id: 'trip-route-casing', type: 'line', source: 'trip-route',
