@@ -13,6 +13,9 @@ import { parseTripShape } from './trip-shape';
   template: `
     <section class="trip-map" aria-label="Selected trip stops map">
       <div #container class="map-container" aria-label="Interactive map"></div>
+      @if (graphError()) {
+        <div class="graph-status small" role="status">The shapes graph could not be loaded.</div>
+      }
       @if (state() !== 'ready') {
         <div class="map-status small" role="status">
           @if (state() === 'error') {
@@ -27,6 +30,8 @@ import { parseTripShape } from './trip-shape';
     :host { display: block; width: 100%; height: 100%; }
     .trip-map { position: relative; height: 100%; overflow: hidden; }
     .map-container { width: 100%; height: 100%; }
+    .graph-status { position: absolute; bottom: 2rem; left: .5rem;
+      padding: .25rem .5rem; border-radius: .25rem; background: #ffffffed; }
     .map-status { position: absolute; inset: 0; display: flex; align-items: center;
       justify-content: center; gap: .5rem; background: #ffffffd9; }
   `
@@ -35,6 +40,7 @@ export class MapComponent {
   readonly stops = input<readonly MapStop[]>([]);
   readonly tripId = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
+  protected readonly graphError = signal(false);
   private readonly mapService = inject(MapService);
   private readonly container = viewChild.required<ElementRef<HTMLElement>>('container');
   private readonly destroyRef = inject(DestroyRef);
@@ -73,12 +79,17 @@ export class MapComponent {
     this.popup = undefined;
     this.libreMap = undefined;
     this.state.set('loading');
+    this.graphError.set(false);
     this.loadTimeout = setTimeout(() => this.state.set('error'), 20_000);
     try {
       const initialized = await this.mapService.init(this.container().nativeElement, () => {
         clearTimeout(this.loadTimeout);
         this.state.set('ready');
-      }, () => {
+      }, event => {
+        if (event.sourceId === 'shapes-graph') {
+          this.graphError.set(true);
+          return;
+        }
         clearTimeout(this.loadTimeout);
         this.state.set('error');
       });
@@ -93,6 +104,16 @@ export class MapComponent {
   }
 
   private addLayers(map: LibreMap, PopupType: typeof Popup): void {
+    map.addSource('shapes-graph', { type: 'vector', url: `pmtiles://${APP_URLS.shapesGraph}` });
+    map.addLayer({
+      id: 'shapes-graph', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: {
+        'line-color': '#7b8794',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 14, 2],
+        'line-opacity': 0.5
+      }
+    });
     map.addSource('trip-route', { type: 'geojson', data: this.routeData });
     map.addLayer({
       id: 'trip-route', type: 'line', source: 'trip-route',
