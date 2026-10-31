@@ -3,8 +3,11 @@ import { Observable } from 'rxjs';
 import { GtfsDayTripTimelineRow, RouteJSON, StopJSON } from '../../gtfs-static/dto';
 import { FeedMetadataDto, TripTimelineUpdateDto, TripUpdateDto } from '../dto';
 import { TripUpdate } from '../models';
+import type { ShapesGraphMappings } from '../../map/shapes-graph';
 
 export type GtfsRtStreamEvent =
+  | { type: 'shapes-graph'; mappings: ShapesGraphMappings }
+  | { type: 'shapes-graph-error'; message: string }
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: readonly TripUpdate[]; processed: number }
   | { type: 'trip-timelines'; updates: readonly TripTimelineUpdateDto[] }
@@ -16,6 +19,8 @@ export type GtfsRtStreamEvent =
   | { type: 'stops-error'; message: string };
 
 type WorkerResponse =
+  | { type: 'shapes-graph'; mappings: ShapesGraphMappings }
+  | { type: 'shapes-graph-error'; message: string }
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: TripUpdateDto[]; processed: number }
   | { type: 'trip-timelines'; updates: TripTimelineUpdateDto[] }
