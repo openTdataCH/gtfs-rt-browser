@@ -13,8 +13,8 @@ import { parseTripShape } from './trip-shape';
   template: `
     <section class="trip-map" aria-label="Selected trip stops map">
       <div #container class="map-container" aria-label="Interactive map"></div>
-      <fieldset class="layer-manager">
-        <legend>Layers</legend>
+      <div class="layer-manager" role="group" aria-label="Map layers">
+        <div class="layer-manager-heading">Layers</div>
         <label>
           <input type="checkbox" [checked]="shapesVisible()" (change)="updateShapesVisibility($event)">
           <span>GTFS-s Shapes</span>
@@ -23,7 +23,7 @@ import { parseTripShape } from './trip-shape';
           <input type="checkbox" [checked]="backgroundMapsVisible()" (change)="updateBackgroundMapsVisibility($event)">
           <span>Background Map</span>
         </label>
-      </fieldset>
+      </div>
       @if (graphError()) {
         <div class="graph-status small" role="status">The shapes graph could not be loaded.</div>
       }
@@ -44,7 +44,7 @@ import { parseTripShape } from './trip-shape';
     .layer-manager { position: absolute; top: 10px; left: 10px; margin: 0;
       padding: .5rem .75rem; border: 0; border-radius: 4px; background: #fff;
       box-shadow: 0 0 0 2px #0000001a; font-size: .8rem; }
-    .layer-manager legend { float: none; width: auto; margin: 0 0 .25rem;
+    .layer-manager-heading { margin: 0 0 .4rem;
       font-size: inherit; font-weight: 600; }
     .layer-manager label { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
     .layer-manager label + label { margin-top: .25rem; }
@@ -176,9 +176,14 @@ export class MapComponent {
     });
     map.addSource('trip-route', { type: 'geojson', data: this.routeData });
     map.addLayer({
+      id: 'trip-route-casing', type: 'line', source: 'trip-route',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#fff', 'line-width': 8 }
+    });
+    map.addLayer({
       id: 'trip-route', type: 'line', source: 'trip-route',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#357abd', 'line-width': 3, 'line-opacity': 0.7 }
+      paint: { 'line-color': '#357abd', 'line-width': 5, 'line-opacity': 0.9 }
     });
     map.addSource('trip-stops', { type: 'geojson', data: this.stopData });
     map.addLayer({

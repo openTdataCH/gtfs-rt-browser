@@ -31,8 +31,8 @@
 .timeline-pane { position: relative; }
 .timeline-controls-toggle {
   position: absolute; top: .25rem; right: .25rem; z-index: 8;
-  display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
-  padding: 0; border: 1px solid #dee2e6; color: #526477;
+  display: inline-flex; align-items: center; gap: .3rem; height: 1.75rem;
+  padding: 0 .5rem; border: 1px solid #dee2e6; color: #526477; white-space: nowrap;
 }
 .timeline-controls { flex: 0 0 auto; }
 .timeline-controls.controls-collapsed { display: none; }
