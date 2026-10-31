@@ -327,6 +327,10 @@ export class AppComponent {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });
+  protected readonly selectedShapeEdgeIds = computed(() => {
+    const tripId = this.selected()?.tripId;
+    return resultShapeEdgeIds(tripId ? [tripId] : [], this.shapesGraphMappings());
+  });
   protected readonly selectedStaticTripState = computed<StaticTripState>(() => {
     const item = this.selected();
     const gtfsDay = this.metadata()?.feedVersion;

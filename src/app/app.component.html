@@ -485,7 +485,7 @@
           } @else { <div class="h-100 d-flex align-items-center justify-content-center text-secondary">Select a trip update.</div> }
         </aside>
         <aside class="map-pane" aria-label="Trip map">
-          <app-map [stops]="stopTableRows()" [tripId]="selectedStaticTrip()?.trip_id"
+          <app-map [stops]="stopTableRows()" [selectedEdgeIds]="selectedShapeEdgeIds()"
             [resultEdgeIds]="filteredShapeEdgeIds()" [resultShapesStatus]="shapesGraphStatus()"
             [resultShapesError]="shapesGraphError()" />
         </aside>
