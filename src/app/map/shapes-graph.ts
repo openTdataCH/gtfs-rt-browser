@@ -4,37 +4,40 @@ export interface ShapesGraphMappings {
 }
 
 export function parseShapesGraphMappings(
-  tripRows: unknown,
-  shapeRows: unknown,
+  value: unknown,
   tripIds: ReadonlySet<string>
 ): ShapesGraphMappings {
-  if (!Array.isArray(tripRows) || !Array.isArray(shapeRows)) {
-    throw new Error('Shapes graph mappings must be arrays.');
+  if (!isRecord(value) || !isRecord(value['trip_shapes']) || !isRecord(value['shapes_edges'])) {
+    throw new Error('Shapes graph mappings must contain trip_shapes and shapes_edges objects.');
   }
+  const tripShapes = value['trip_shapes'];
+  const shapesEdges = value['shapes_edges'];
   const shapeIdsByTripId = new Map<string, number>();
   const neededShapeIds = new Set<number>();
-  for (const row of tripRows) {
-    if (!Array.isArray(row) || row.length !== 2 || typeof row[0] !== 'string'
-      || !Number.isSafeInteger(row[1]) || row[1] < 1) {
+  for (const tripId of tripIds) {
+    if (!Object.hasOwn(tripShapes, tripId)) continue;
+    const shapeId = tripShapes[tripId];
+    if (typeof shapeId !== 'number' || !Number.isSafeInteger(shapeId) || shapeId < 1) {
       throw new Error('Invalid trip-to-shape mapping.');
     }
-    if (tripIds.has(row[0])) {
-      shapeIdsByTripId.set(row[0], row[1]);
-      neededShapeIds.add(row[1]);
-    }
+    shapeIdsByTripId.set(tripId, shapeId);
+    neededShapeIds.add(shapeId);
   }
   const edgeIdsByShapeId = new Map<number, readonly number[]>();
-  for (const row of shapeRows) {
-    if (!Array.isArray(row) || row.length !== 2 || !Number.isSafeInteger(row[0])
-      || row[0] < 1 || !Array.isArray(row[1])
-      || !row[1].every((edgeId: unknown) => typeof edgeId === 'number' && Number.isSafeInteger(edgeId) && edgeId !== 0)) {
+  for (const shapeId of neededShapeIds) {
+    if (!Object.hasOwn(shapesEdges, shapeId)) continue;
+    const edgeIds = shapesEdges[String(shapeId)];
+    if (!Array.isArray(edgeIds)
+      || !edgeIds.every((edgeId: unknown) => typeof edgeId === 'number' && Number.isSafeInteger(edgeId) && edgeId !== 0)) {
       throw new Error('Invalid shape-to-edges mapping.');
     }
-    if (neededShapeIds.has(row[0])) {
-      edgeIdsByShapeId.set(row[0], row[1].map((edgeId: number) => Math.abs(edgeId)));
-    }
+    edgeIdsByShapeId.set(shapeId, edgeIds.map((edgeId: number) => Math.abs(edgeId)));
   }
   return { shapeIdsByTripId, edgeIdsByShapeId };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function resultShapeEdgeIds(tripIds: Iterable<string>, mappings?: ShapesGraphMappings): number[] {
