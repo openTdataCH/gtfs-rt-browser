@@ -12,6 +12,7 @@ export const APP_URLS = {
   gtfsChTrips: 'https://api.gtfs.ch/v1/trips',
 
   shapesGraph: 'https://api.gtfs.ch/shapes-graph/trgraph.pmtiles',
+  tripShapeEdgeMaps: 'https://api.gtfs.ch/shapes-graph/trip-shape-edge-maps.json',
 
   atlasBusinessOrganisations:
     'https://atlas.app.sbb.ch/business-organisation-directory/business-organisations',
