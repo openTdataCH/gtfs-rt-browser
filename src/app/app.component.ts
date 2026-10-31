@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { APP_URLS } from './config';
 import { MapComponent } from './map/map.component';
+import { resultShapeEdgeIds, type ShapesGraphMappings } from './map/shapes-graph';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
@@ -134,6 +135,9 @@ export class AppComponent {
   protected readonly staticOnlyRoutesByRowid = signal<ReadonlyMap<number, RouteJSON>>(new Map());
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
+  private readonly shapesGraphMappings = signal<ShapesGraphMappings | undefined>(undefined);
+  protected readonly shapesGraphStatus = signal<'loading' | 'ready' | 'error'>('loading');
+  protected readonly shapesGraphError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly searchTerm = signal(this.initialQuery.get('q') ?? '');
@@ -315,6 +319,9 @@ export class AppComponent {
   });
   protected readonly filteredRealtimeCount = computed(() =>
     this.filteredItems().filter((item) => !item.isStaticOnly).length);
+  protected readonly filteredShapeEdgeIds = computed(() => resultShapeEdgeIds(
+    this.filteredItems().map(item => item.tripId), this.shapesGraphMappings()
+  ));
 
   protected readonly selected = computed<TripUpdate | undefined>(() => {
     const items = this.filteredItems();
@@ -541,6 +548,8 @@ export class AppComponent {
     this.staticOnlyTripsByAgency.set(new Map());
     this.staticOnlyRoutesByRowid.set(new Map());
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
+    this.shapesGraphMappings.set(undefined);
+    this.shapesGraphStatus.set('loading'); this.shapesGraphError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
       this.parseState.set({ ...emptyParseState('error'), message: this.feedSource.error });
@@ -587,6 +596,14 @@ export class AppComponent {
           this.stopsById.set(event.stopsById);
         }
         if (event.type === 'stops-error') this.stopsLookupError.set(event.message);
+        if (event.type === 'shapes-graph') {
+          this.shapesGraphMappings.set(event.mappings);
+          this.shapesGraphStatus.set('ready');
+        }
+        if (event.type === 'shapes-graph-error') {
+          this.shapesGraphError.set(event.message);
+          this.shapesGraphStatus.set('error');
+        }
       },
       error: (error: Error) => this.parseState.set({ ...emptyParseState('error'), message: error.message })
     });
