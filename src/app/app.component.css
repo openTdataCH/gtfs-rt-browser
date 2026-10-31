@@ -28,6 +28,14 @@
 }
 .workspace, .list-pane, .detail-pane, .message-viewport { min-height: 0; }
 .timeline-pane, .timeline-scroll, .timeline-viewport { min-width: 0; min-height: 0; }
+.timeline-pane { position: relative; }
+.timeline-controls-toggle {
+  position: absolute; top: .25rem; right: .25rem; z-index: 8;
+  display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
+  padding: 0; border: 1px solid #dee2e6; color: #526477;
+}
+.timeline-controls { flex: 0 0 auto; }
+.timeline-controls.controls-collapsed { display: none; }
 .timeline-viewport { position: relative; }
 .timeline-fetch-overlay {
   position: absolute; inset: 0 0 0 20rem; z-index: 7;
@@ -173,7 +181,7 @@ th { white-space: nowrap; background: #f8f9fa; }
   .timeline-fetch-overlay { left: 0; }
   .app-header { padding-inline: 1rem !important; }
   .header-metadata { display: none !important; }
-  .timeline-shared-filters.mobile-collapsed, .timeline-local-filters.mobile-collapsed,
+  .timeline-controls { max-height: 60dvh; overflow-y: auto; }
   .error-filters.mobile-collapsed { display: none; }
   .search-input, .agency-filter, .route-type-select, .relationship-select { width: 100%; }
   .timeline-local-filters .search-input, .timeline-local-filters .route-type-select,

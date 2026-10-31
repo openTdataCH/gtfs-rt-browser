@@ -146,6 +146,7 @@ export class AppComponent {
   protected readonly groupByRouteShortName = signal(false);
   protected readonly expandedRouteShortNames = signal<ReadonlySet<string>>(new Set());
   protected readonly filtersExpanded = signal(false);
+  protected readonly timelineControlsExpanded = signal(window.matchMedia('(min-width: 768px)').matches);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
   protected readonly timelineItems = computed(() => {
@@ -736,6 +737,7 @@ export class AppComponent {
     this.expandedRouteShortNames.set(new Set());
   }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
+  protected toggleTimelineControls(): void { this.timelineControlsExpanded.update(value => !value); }
 
   protected delayLabel(seconds?: number): string {
     if (seconds === undefined) return '';
