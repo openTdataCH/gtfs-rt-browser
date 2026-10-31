@@ -37,6 +37,7 @@ import { parseTripShape } from './trip-shape';
   `
 })
 export class MapComponent {
+  private readonly excludedBasemapLayerIds: readonly string[] = ['landcover_wood', 'park'];
   readonly stops = input<readonly MapStop[]>([]);
   readonly tripId = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
@@ -92,7 +93,7 @@ export class MapComponent {
         }
         clearTimeout(this.loadTimeout);
         this.state.set('error');
-      });
+      }, this.excludedBasemapLayerIds);
       if (!initialized || this.destroyRef.destroyed) return;
       this.libreMap = initialized.map;
       initialized.map.once('load', () => this.addLayers(initialized.map, initialized.Popup));

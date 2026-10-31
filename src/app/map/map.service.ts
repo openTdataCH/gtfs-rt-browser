@@ -1,22 +1,37 @@
 import { Injectable } from '@angular/core';
-import type { Map as LibreMap, Popup } from 'maplibre-gl';
+import type { ErrorEvent, Map as LibreMap, Popup, StyleSpecification } from 'maplibre-gl';
+
+let protocolRegistered = false;
 
 @Injectable()
 export class MapService {
   private map?: LibreMap;
   private resizeObserver?: ResizeObserver;
+  private styleController?: AbortController;
   private generation = 0;
 
-  async init(container: HTMLElement, onReady: () => void, onError: () => void): Promise<{ map: LibreMap; Popup: typeof Popup } | undefined> {
+  async init(container: HTMLElement, onReady: () => void, onError: (event: ErrorEvent & { sourceId?: string }) => void, excludedLayerIds: readonly string[] = []): Promise<{ map: LibreMap; Popup: typeof Popup } | undefined> {
     this.destroy();
     const generation = this.generation;
+    const controller = new AbortController();
+    this.styleController = controller;
     // Match the reference app's lazy import, including its CommonJS default export.
-    const { default: mapgl } = await import('maplibre-gl');
+    const [{ default: mapgl }, { Protocol }, response] = await Promise.all([
+      import('maplibre-gl'), import('pmtiles'),
+      fetch('https://tiles.openfreemap.org/styles/positron', { signal: controller.signal })
+    ]);
+    if (!response.ok) throw new Error(`Failed to load map style: ${response.status}`);
+    const style: StyleSpecification = await response.json();
     if (generation !== this.generation) return;
+    style.layers = style.layers.filter(layer => !excludedLayerIds.includes(layer.id));
+    if (!protocolRegistered) {
+      mapgl.addProtocol('pmtiles', new Protocol().tile);
+      protocolRegistered = true;
+    }
 
     const map = new mapgl.Map({
       container,
-      style: 'https://tiles.openfreemap.org/styles/positron',
+      style,
       center: [8.23, 46.82],
       zoom: 6.5,
       attributionControl: { compact: true }
@@ -25,7 +40,7 @@ export class MapService {
     map.addControl(new mapgl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new mapgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     map.on('error', onError);
-    map.on('idle', onReady);
+    map.once('load', onReady);
     this.resizeObserver = new ResizeObserver(() => map.resize());
     this.resizeObserver.observe(container);
     return { map, Popup: mapgl.Popup };
@@ -33,6 +48,8 @@ export class MapService {
 
   destroy(): void {
     this.generation++;
+    this.styleController?.abort();
+    this.styleController = undefined;
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.map?.remove();
