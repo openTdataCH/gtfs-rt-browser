@@ -4,6 +4,7 @@ import type { GeoJSONSource, Map as LibreMap, Popup } from 'maplibre-gl';
 import { APP_URLS } from '../config';
 import { MapService } from './map.service';
 import type { MapStop } from './map-stop.model';
+import { estimateTripPosition, parseTripPolyline } from './trip-position';
 
 @Component({
   selector: 'app-map',
@@ -72,6 +73,7 @@ export class MapComponent {
   private readonly excludedBasemapLayerIds: readonly string[] = ['landcover_wood', 'park'];
   readonly stops = input<readonly MapStop[]>([]);
   readonly tripId = input<string>();
+  readonly positionMinute = input<number>();
   readonly resultEdgeIds = input<readonly number[]>([]);
   readonly resultShapesStatus = input<'loading' | 'ready' | 'error'>('loading');
   readonly resultShapesError = input<string>();
@@ -88,6 +90,7 @@ export class MapComponent {
   private popup?: Popup;
   private stopData: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] };
   private routeData: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] };
+  private positionData: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] };
   private readonly tripShape = signal<{ tripId: string; coordinates: Position[] } | undefined>(undefined);
   private readonly shapeCache = new Map<string, Position[]>();
   private loadTimeout?: ReturnType<typeof setTimeout>;
@@ -106,6 +109,16 @@ export class MapComponent {
     effect(() => {
       const shape = this.tripShape();
       this.setStops(this.stops(), shape?.tripId === this.tripId()?.trim() ? shape?.coordinates : undefined);
+    });
+    effect(() => {
+      const shape = this.tripShape();
+      const position = estimateTripPosition(this.stops(), this.positionMinute(),
+        shape?.tripId === this.tripId()?.trim() ? shape?.coordinates : undefined);
+      this.positionData = {
+        type: 'FeatureCollection',
+        features: position ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: position } }] : []
+      };
+      this.libreMap?.getSource<GeoJSONSource>('trip-position')?.setData(this.positionData);
     });
     afterNextRender(() => void this.initialize());
     this.destroyRef.onDestroy(() => {
@@ -157,7 +170,7 @@ export class MapComponent {
   }
 
   private applySelectedTripVisibility(): void {
-    for (const layerId of ['trip-route-casing', 'trip-route', 'trip-stops', 'trip-stop-numbers', 'trip-position-halo', 'trip-position', 'trip-position-label']) {
+    for (const layerId of ['trip-route-casing', 'trip-route', 'trip-stops', 'trip-stop-numbers', 'trip-position-halo', 'trip-position']) {
       if (this.libreMap?.getLayer(layerId)) {
         this.libreMap.setLayoutProperty(layerId, 'visibility', this.selectedTripVisible() ? 'visible' : 'none');
       }
@@ -285,6 +298,15 @@ export class MapComponent {
         'text-ignore-placement': true
       },
       paint: { 'text-color': '#2764a6', 'text-halo-color': '#fff', 'text-halo-width': 2 }
+    });
+    map.addSource('trip-position', { type: 'geojson', data: this.positionData });
+    map.addLayer({
+      id: 'trip-position-halo', type: 'circle', source: 'trip-position',
+      paint: { 'circle-radius': 15, 'circle-color': '#d63343', 'circle-opacity': 0.2 }
+    });
+    map.addLayer({
+      id: 'trip-position', type: 'circle', source: 'trip-position',
+      paint: { 'circle-radius': 8, 'circle-color': '#d63343', 'circle-stroke-color': '#fff', 'circle-stroke-width': 3 }
     });
     this.applySelectedTripVisibility();
     map.on('click', 'trip-stops', event => {

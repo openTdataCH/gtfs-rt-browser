@@ -327,9 +327,9 @@ export class AppComponent {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
   });
-  protected readonly selectedShapeEdgeIds = computed(() => {
-    const tripId = this.selected()?.tripId;
-    return resultShapeEdgeIds(tripId ? [tripId] : [], this.shapesGraphMappings());
+  protected readonly selectedPositionMinute = computed(() => {
+    const item = this.selected();
+    return item && !item.cancelled ? this.nowDayMinute() : undefined;
   });
   protected readonly selectedStaticTripState = computed<StaticTripState>(() => {
     const item = this.selected();
