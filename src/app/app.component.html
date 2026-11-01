@@ -53,6 +53,14 @@
       <div class="workspace d-flex flex-grow-1 overflow-hidden">
         @if (activeView() === 'timeline') {
         <section class="timeline-pane d-flex flex-column flex-grow-1 overflow-hidden" aria-label="Trip timeline">
+          <button type="button" class="timeline-controls-toggle btn btn-light btn-sm" (click)="toggleTimelineControls()"
+            aria-controls="timeline-controls" [attr.aria-expanded]="timelineControlsExpanded()"
+            [attr.aria-label]="timelineControlsExpanded() ? 'Hide controls' : 'Show controls'"
+            [title]="timelineControlsExpanded() ? 'Hide controls' : 'Show controls'">
+            <span aria-hidden="true">{{ timelineControlsExpanded() ? '▴' : '▾' }}</span>
+            <span>{{ timelineControlsExpanded() ? 'Hide controls' : 'Show controls' }}</span>
+          </button>
+          <div id="timeline-controls" class="timeline-controls" [class.controls-collapsed]="!timelineControlsExpanded()">
           <div class="timeline-summary small text-secondary border-bottom bg-white px-3 py-2">
             <div class="timeline-summary-main">
               <section class="timeline-summary-section timeline-now-section" aria-label="Timeline time">
@@ -94,13 +102,7 @@
               </section>
             </div>
           </div>
-          <div class="filter-toggle border-bottom bg-white px-3 py-2 d-md-none">
-            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleFilters()"
-              [attr.aria-expanded]="filtersExpanded()">
-              {{ filtersExpanded() ? 'Hide filters' : 'Filters' }}
-            </button>
-          </div>
-          <div class="timeline-shared-filters border-bottom bg-white px-3 py-2" [class.mobile-collapsed]="!filtersExpanded()" aria-label="GTFS-RT and GTFS-S filters">
+          <div class="timeline-shared-filters border-bottom bg-white px-3 py-2" aria-label="GTFS-RT and GTFS-S filters">
             <div class="agency-filter input-group input-group-sm">
               <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
                 <option value="">All agencies ({{ agencyOptions().length | number }})</option>
@@ -122,7 +124,7 @@
               <label class="form-check-label small" for="active-trips-only">Active trips</label>
             </div>
           </div>
-          <div class="timeline-local-filters border-bottom bg-white px-3 py-2" [class.mobile-collapsed]="!filtersExpanded()" aria-label="GTFS-RT timeline filters">
+          <div class="timeline-local-filters border-bottom bg-white px-3 py-2" aria-label="GTFS-RT timeline filters">
             <input type="search" class="form-control form-control-sm search-input" placeholder="Search trip, route, vehicle or stop …" [value]="searchTerm()" (input)="updateSearch($event)">
             <select class="form-select form-select-sm route-type-select" [value]="routeTypeFilter()" (change)="updateRouteType($event)">
               <option value="">All route types ({{ routeTypeOptions().length | number }})</option>
@@ -180,6 +182,7 @@
                 </div>
               </div>
             </div>
+          </div>
           </div>
           <div class="timeline-viewport flex-grow-1">
           <div #timelineScroll class="timeline-scroll h-100 overflow-auto">
@@ -393,8 +396,11 @@
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
               @if (selectedStaticTrip(); as staticTrip) {
-                <dt>GTFS-S direction ID</dt><dd>{{ staticTrip.direction_id || '—' }}</dd>
-                <dt>GTFS-S  hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
+                @if (staticTrip.trip_short_name.trim(); as tripShortName) {
+                  <dt>trip.trip_short_name</dt><dd><span class="select-whole-id">{{ tripShortName }}</span></dd>
+                }
+                <dt>trip.direction_id</dt><dd>{{ staticTrip.direction_id || '—' }}</dd>
+                <dt>trip.hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
               }
             </dl>
             @if (serviceCalendarMonths().length) {
@@ -482,7 +488,11 @@
           } @else { <div class="h-100 d-flex align-items-center justify-content-center text-secondary">Select a trip update.</div> }
         </aside>
         <aside class="map-pane" aria-label="Trip map">
-          <app-map [stops]="stopTableRows()" [tripId]="selectedStaticTrip()?.trip_id" />
+          <app-map [stops]="stopTableRows()" [tripId]="selected()?.tripId" [positionMinute]="selectedPositionMinute()"
+            [gtfsDay]="metadata()!.feedVersion"
+            (estimatedPositionChange)="selectedPosition.set($event)"
+            [resultEdgeIds]="filteredShapeEdgeIds()" [resultShapesStatus]="shapesGraphStatus()"
+            [resultShapesError]="shapesGraphError()" />
         </aside>
       </div>
     }

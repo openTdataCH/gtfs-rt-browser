@@ -3,8 +3,11 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
+import type { Position } from 'geojson';
 import { APP_URLS } from './config';
 import { MapComponent } from './map/map.component';
+import type { TripPositionUpdate } from './map/trip-position';
+import { resultShapeEdgeIds, type ShapesGraphMappings } from './map/shapes-graph';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
@@ -134,8 +137,12 @@ export class AppComponent {
   protected readonly staticOnlyRoutesByRowid = signal<ReadonlyMap<number, RouteJSON>>(new Map());
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
+  private readonly shapesGraphMappings = signal<ShapesGraphMappings | undefined>(undefined);
+  protected readonly shapesGraphStatus = signal<'loading' | 'ready' | 'error'>('loading');
+  protected readonly shapesGraphError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
+  protected readonly selectedPosition = signal<TripPositionUpdate | undefined>(undefined);
   protected readonly searchTerm = signal(this.initialQuery.get('q') ?? '');
   protected readonly agencyFilter = signal('');
   protected readonly agencySort = signal<'name' | 'count'>('count');
@@ -146,6 +153,7 @@ export class AppComponent {
   protected readonly groupByRouteShortName = signal(false);
   protected readonly expandedRouteShortNames = signal<ReadonlySet<string>>(new Set());
   protected readonly filtersExpanded = signal(false);
+  protected readonly timelineControlsExpanded = signal(window.matchMedia('(min-width: 768px)').matches);
   protected readonly activeView = signal<'timeline' | 'errors'>('timeline');
 
   protected readonly timelineItems = computed(() => {
@@ -303,6 +311,9 @@ export class AppComponent {
   });
 
   protected readonly filteredItems = computed(() => {
+    // Resolve URL filters before exposing a selection or highlighting map edges.
+    if (this.parseState().status !== 'complete'
+      || (this.activeTripsOnly() && this.timelineStatus() !== 'ready')) return [];
     const agency = this.agencyFilter();
     const routeType = this.routeTypeFilter();
     const relationship = this.relationshipFilter();
@@ -314,10 +325,19 @@ export class AppComponent {
   });
   protected readonly filteredRealtimeCount = computed(() =>
     this.filteredItems().filter((item) => !item.isStaticOnly).length);
+  protected readonly filteredShapeEdgeIds = computed(() => resultShapeEdgeIds(
+    this.filteredItems().map(item => item.tripId), this.shapesGraphMappings()
+  ));
 
   protected readonly selected = computed<TripUpdate | undefined>(() => {
     const items = this.filteredItems();
     return items.find((item) => item.id === this.selectedId()) ?? items[0];
+  });
+  protected readonly selectedPositionMinute = computed(() => {
+    const item = this.selected();
+    const feedDay = this.metadata()?.feedDay;
+    return item && !item.cancelled && feedDay
+      ? swissDayMinute(this.browserNow() / 1_000, feedDay) : undefined;
   });
   protected readonly selectedStaticTripState = computed<StaticTripState>(() => {
     const item = this.selected();
@@ -389,9 +409,10 @@ export class AppComponent {
     };
   });
   protected readonly selectedMapUrl = computed(() => {
-    const item = this.selected();
-    if (!item || this.timelineStatus() !== 'ready' || !this.isActiveAtNow(item)) return undefined;
-    return approximateTripMapUrl(this.stopTableRows(), this.nowDayMinute());
+    const position = this.selectedPosition();
+    if (!position?.coordinates || position.tripId !== this.selected()?.tripId
+      || position.minute !== this.selectedPositionMinute()) return undefined;
+    return trafimageMapUrl(position.coordinates);
   });
 
   protected readonly ojpSearchUrl = computed(() => {
@@ -486,7 +507,7 @@ export class AppComponent {
     const clock = window.setInterval(() => {
       const now = Date.now();
       this.browserNow.set(now);
-    }, 30_000);
+    }, 1_000);
     this.destroyRef.onDestroy(() => window.clearInterval(clock));
     this.destroyRef.onDestroy(() => window.clearTimeout(this.filterResetTimer));
     effect(() => {
@@ -540,6 +561,8 @@ export class AppComponent {
     this.staticOnlyTripsByAgency.set(new Map());
     this.staticOnlyRoutesByRowid.set(new Map());
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
+    this.shapesGraphMappings.set(undefined);
+    this.shapesGraphStatus.set('loading'); this.shapesGraphError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
       this.parseState.set({ ...emptyParseState('error'), message: this.feedSource.error });
@@ -555,7 +578,6 @@ export class AppComponent {
         }
         if (event.type === 'trip-updates') {
           this.items.update((items) => [...items, ...event.updates]);
-          this.selectedId.update((id) => id ?? event.updates[0]?.id);
           this.parseState.set({ ...emptyParseState('loading'), processed: event.processed });
         }
         if (event.type === 'trip-timelines') {
@@ -579,13 +601,21 @@ export class AppComponent {
           this.timelineStatus.set('error');
         }
         if (event.type === 'complete') {
-          this.parseState.set({ ...emptyParseState('complete'), count: event.count, elapsedMs: performance.now() - this.startedAt });
           this.resolveUrlAgency();
+          this.parseState.set({ ...emptyParseState('complete'), count: event.count, elapsedMs: performance.now() - this.startedAt });
         }
         if (event.type === 'stops-lookup') {
           this.stopsById.set(event.stopsById);
         }
         if (event.type === 'stops-error') this.stopsLookupError.set(event.message);
+        if (event.type === 'shapes-graph') {
+          this.shapesGraphMappings.set(event.mappings);
+          this.shapesGraphStatus.set('ready');
+        }
+        if (event.type === 'shapes-graph-error') {
+          this.shapesGraphError.set(event.message);
+          this.shapesGraphStatus.set('error');
+        }
       },
       error: (error: Error) => this.parseState.set({ ...emptyParseState('error'), message: error.message })
     });
@@ -710,6 +740,7 @@ export class AppComponent {
     this.resetListAfterFilterChange();
   }
   private resetListAfterFilterChange(): void {
+    this.resetNowTime();
     window.clearTimeout(this.filterResetTimer);
     this.filterResetTimer = window.setTimeout(() => {
       const first = this.activeView() === 'timeline' && this.groupByRouteShortName() && this.canGroupByRouteShortName()
@@ -736,6 +767,7 @@ export class AppComponent {
     this.expandedRouteShortNames.set(new Set());
   }
   protected toggleFilters(): void { this.filtersExpanded.update((value) => !value); }
+  protected toggleTimelineControls(): void { this.timelineControlsExpanded.update(value => !value); }
 
   protected delayLabel(seconds?: number): string {
     if (seconds === undefined) return '';
@@ -938,33 +970,7 @@ function stopProgressMinute(
     scheduledDeparture ?? scheduledArrival, startDate, feedDay);
 }
 
-function approximateTripMapUrl(rows: readonly StopTableRow[], now: number): string | undefined {
-  const stops = rows.filter((row) => row.longitude !== undefined && row.latitude !== undefined
-    && Number.isFinite(row.longitude) && Number.isFinite(row.latitude)
-    && Math.abs(row.latitude) < 85
-    && (row.arrivalMinute !== undefined || row.departureMinute !== undefined))
-    .sort((left, right) => (left.arrivalMinute ?? left.departureMinute!)
-      - (right.arrivalMinute ?? right.departureMinute!));
-  if (!stops.length) return undefined;
-
-  // Same straight-line, stop-to-stop approximation as the showcases Trip.computeMapURL helper.
-  let longitude = stops[0].longitude!;
-  let latitude = stops[0].latitude!;
-  for (let index = 1; index < stops.length; index += 1) {
-    const previous = stops[index - 1];
-    const next = stops[index];
-    const arrival = next.arrivalMinute ?? next.departureMinute!;
-    if (now < arrival) {
-      const departure = previous.departureMinute ?? previous.arrivalMinute!;
-      const fraction = arrival > departure ? Math.max(0, Math.min(1, (now - departure) / (arrival - departure))) : 0;
-      longitude = previous.longitude! + fraction * (next.longitude! - previous.longitude!);
-      latitude = previous.latitude! + fraction * (next.latitude! - previous.latitude!);
-      break;
-    }
-    longitude = next.longitude!;
-    latitude = next.latitude!;
-  }
-
+function trafimageMapUrl([longitude, latitude]: Position): string {
   const radius = 6_378_137;
   const x = radius * longitude * Math.PI / 180;
   const y = radius * Math.log(Math.tan(Math.PI / 4 + latitude * Math.PI / 360));

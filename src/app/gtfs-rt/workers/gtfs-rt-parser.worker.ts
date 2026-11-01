@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 
 import GtfsRealtimeBindings, { transit_realtime } from 'gtfs-realtime-bindings';
-import { APP_URLS } from '../../config';
+import { APP_URLS, withGtfsDay } from '../../config';
+import { parseShapesGraphMappings } from '../../map/shapes-graph';
 import {
   BusinessOrganisationDto, FeedMetadataDto, GoRealtimeDto, StopScheduleRelationship, StopTimeEventDto,
   StopTimeUpdateDto, TripScheduleRelationship, TripTimelineUpdateDto, TripUpdateDto
@@ -88,6 +89,24 @@ async function parseFeed(url: string): Promise<void> {
     })))
       .then((timelines) => ({ timelines }))
       .catch((error: unknown) => ({ error }));
+
+    const shapesGraphPromise = Promise.all([
+      fetchShapesGraphMapping(withGtfsDay(APP_URLS.tripShapeEdgeMaps, gtfsDay)),
+      tripTimelinesPromise
+    ]).then(([mappingData, timelineResult]) => {
+      const tripIds = new Set(tripEntities.flatMap(entity =>
+        entity.tripUpdate?.trip.tripId ? [entity.tripUpdate.trip.tripId] : []));
+      if ('timelines' in timelineResult) {
+        for (const { timelines } of timelineResult.timelines) {
+          for (const trip of timelines.rows) tripIds.add(trip.trip_id);
+        }
+      }
+      const mappings = parseShapesGraphMappings(mappingData, tripIds);
+      postMessage({ type: 'shapes-graph', mappings });
+    }).catch((error: unknown) => postMessage({
+      type: 'shapes-graph-error',
+      message: error instanceof Error ? error.message : 'Unable to load shapes graph mappings.'
+    }));
 
     const [agencyLookup, routesLookup] = await Promise.all([
       fetchGtfsLookup(APP_URLS.gtfsAgencyLookup, gtfsDay, 'agency'),
@@ -186,11 +205,17 @@ async function parseFeed(url: string): Promise<void> {
         message: error instanceof Error ? error.message : 'Unknown GTFS day-trip timeline error.'
       });
     }
-    await stopsLookupPromise;
+    await Promise.all([stopsLookupPromise, shapesGraphPromise]);
     postMessage({ type: 'worker-done' });
   } catch (error: unknown) {
     postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown GTFS-RT parsing error.' });
   }
+}
+
+async function fetchShapesGraphMapping(url: string): Promise<unknown> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Shapes graph mapping request failed: ${response.status} ${url}`);
+  return response.json();
 }
 
 function formatSwissDay(timestamp: number): string {

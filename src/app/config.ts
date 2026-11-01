@@ -10,9 +10,19 @@ export const APP_URLS = {
   gtfsDayTrips: 'https://tools.opentransportdata.swiss/gtfs-query/query_day_trips',
   gtfsChRoutes: 'https://gtfs.ch/routes',
   gtfsChTrips: 'https://api.gtfs.ch/v1/trips',
+
+  shapesGraph: 'https://api.gtfs.ch/shapes-graph/trgraph.pmtiles',
+  tripShapeEdgeMaps: 'https://api.gtfs.ch/shapes-graph/trip-shape-edge-maps.json',
+
   atlasBusinessOrganisations:
     'https://atlas.app.sbb.ch/business-organisation-directory/business-organisations',
   businessOrganisations:
     'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv',
   goRealtime: 'https://tools.opentransportdata.swiss/data/go-realtime.csv'
 } as const;
+
+export function withGtfsDay(resourceUrl: string, gtfsDay: string): string {
+  const url = new URL(resourceUrl);
+  url.searchParams.set('gtfs_day', gtfsDay);
+  return url.toString();
+}
