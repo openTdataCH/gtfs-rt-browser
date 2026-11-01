@@ -127,8 +127,8 @@
 .detail-pane {
   display: flex;
   flex-direction: column;
-  flex: 0 0 500px !important;
-  width: 500px;
+  flex: 0 0 600px !important;
+  width: 600px;
   min-width: 0;
   overflow: hidden;
   border-left: 1px solid #dee2e6;
