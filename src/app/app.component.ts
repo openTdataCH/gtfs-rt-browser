@@ -311,6 +311,9 @@ export class AppComponent {
   });
 
   protected readonly filteredItems = computed(() => {
+    // Resolve URL filters before exposing a selection or highlighting map edges.
+    if (this.parseState().status !== 'complete'
+      || (this.activeTripsOnly() && this.timelineStatus() !== 'ready')) return [];
     const agency = this.agencyFilter();
     const routeType = this.routeTypeFilter();
     const relationship = this.relationshipFilter();
@@ -575,7 +578,6 @@ export class AppComponent {
         }
         if (event.type === 'trip-updates') {
           this.items.update((items) => [...items, ...event.updates]);
-          this.selectedId.update((id) => id ?? event.updates[0]?.id);
           this.parseState.set({ ...emptyParseState('loading'), processed: event.processed });
         }
         if (event.type === 'trip-timelines') {
@@ -599,8 +601,8 @@ export class AppComponent {
           this.timelineStatus.set('error');
         }
         if (event.type === 'complete') {
-          this.parseState.set({ ...emptyParseState('complete'), count: event.count, elapsedMs: performance.now() - this.startedAt });
           this.resolveUrlAgency();
+          this.parseState.set({ ...emptyParseState('complete'), count: event.count, elapsedMs: performance.now() - this.startedAt });
         }
         if (event.type === 'stops-lookup') {
           this.stopsById.set(event.stopsById);
