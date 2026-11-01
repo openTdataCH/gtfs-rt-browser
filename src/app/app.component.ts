@@ -740,6 +740,7 @@ export class AppComponent {
     this.resetListAfterFilterChange();
   }
   private resetListAfterFilterChange(): void {
+    this.resetNowTime();
     window.clearTimeout(this.filterResetTimer);
     this.filterResetTimer = window.setTimeout(() => {
       const first = this.activeView() === 'timeline' && this.groupByRouteShortName() && this.canGroupByRouteShortName()
