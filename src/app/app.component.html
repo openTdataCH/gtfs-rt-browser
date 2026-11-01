@@ -396,8 +396,8 @@
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
               @if (selectedStaticTrip(); as staticTrip) {
-                <dt>GTFS-S direction ID</dt><dd>{{ staticTrip.direction_id || '—' }}</dd>
-                <dt>GTFS-S  hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
+                <dt>trip.direction_id</dt><dd>{{ staticTrip.direction_id || '—' }}</dd>
+                <dt>trip.hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
               }
             </dl>
             @if (serviceCalendarMonths().length) {
