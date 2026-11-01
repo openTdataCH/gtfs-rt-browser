@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import GtfsRealtimeBindings, { transit_realtime } from 'gtfs-realtime-bindings';
-import { APP_URLS } from '../../config';
+import { APP_URLS, withGtfsDay } from '../../config';
 import { parseShapesGraphMappings } from '../../map/shapes-graph';
 import {
   BusinessOrganisationDto, FeedMetadataDto, GoRealtimeDto, StopScheduleRelationship, StopTimeEventDto,
@@ -91,7 +91,7 @@ async function parseFeed(url: string): Promise<void> {
       .catch((error: unknown) => ({ error }));
 
     const shapesGraphPromise = Promise.all([
-      fetchShapesGraphMapping(APP_URLS.tripShapeEdgeMaps),
+      fetchShapesGraphMapping(withGtfsDay(APP_URLS.tripShapeEdgeMaps, gtfsDay)),
       tripTimelinesPromise
     ]).then(([mappingData, timelineResult]) => {
       const tripIds = new Set(tripEntities.flatMap(entity =>

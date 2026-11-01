@@ -1,7 +1,7 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, effect, ElementRef, inject, input, output, signal, viewChild } from '@angular/core';
 import type { FeatureCollection, LineString, Point, Position } from 'geojson';
 import type { GeoJSONSource, Map as LibreMap, Popup } from 'maplibre-gl';
-import { APP_URLS } from '../config';
+import { APP_URLS, withGtfsDay } from '../config';
 import { MapService } from './map.service';
 import type { MapStop } from './map-stop.model';
 import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from './trip-position';
@@ -73,6 +73,7 @@ export class MapComponent {
   private readonly excludedBasemapLayerIds: readonly string[] = ['landcover_wood', 'park'];
   readonly stops = input<readonly MapStop[]>([]);
   readonly tripId = input<string>();
+  readonly gtfsDay = input.required<string>();
   readonly positionMinute = input<number>();
   readonly estimatedPositionChange = output<TripPositionUpdate>();
   readonly resultEdgeIds = input<readonly number[]>([]);
@@ -92,7 +93,7 @@ export class MapComponent {
   private stopData: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] };
   private routeData: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] };
   private positionData: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] };
-  private readonly tripShape = signal<{ tripId: string; coordinates: Position[] } | undefined>(undefined);
+  private readonly tripShape = signal<{ tripId: string; gtfsDay: string; coordinates: Position[] } | undefined>(undefined);
   private readonly shapeCache = new Map<string, Position[]>();
   private loadTimeout?: ReturnType<typeof setTimeout>;
   private appliedResultEdgeIds = new Set<number>();
@@ -101,20 +102,22 @@ export class MapComponent {
     effect(() => this.updateResultShapeEdges(this.resultEdgeIds()));
     effect(onCleanup => {
       const tripId = this.tripId()?.trim();
+      const gtfsDay = this.gtfsDay();
       this.tripShape.set(undefined);
       if (!tripId || tripId === '—') return;
       const controller = new AbortController();
       onCleanup(() => controller.abort());
-      void this.loadTripShape(tripId, controller.signal);
+      void this.loadTripShape(tripId, gtfsDay, controller.signal);
     });
     effect(() => {
       const shape = this.tripShape();
-      this.setStops(this.stops(), shape?.tripId === this.tripId()?.trim() ? shape?.coordinates : undefined);
+      this.setStops(this.stops(), shape && shape.tripId === this.tripId()?.trim() && shape.gtfsDay === this.gtfsDay()
+        ? shape.coordinates : undefined);
     });
     effect(() => {
       const shape = this.tripShape();
       const position = estimateTripPosition(this.stops(), this.positionMinute(),
-        shape?.tripId === this.tripId()?.trim() ? shape?.coordinates : undefined);
+        shape && shape.tripId === this.tripId()?.trim() && shape.gtfsDay === this.gtfsDay() ? shape.coordinates : undefined);
       this.positionData = {
         type: 'FeatureCollection',
         features: position ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: position } }] : []
@@ -242,7 +245,7 @@ export class MapComponent {
       layout: { visibility: this.backgroundMapsVisible() ? 'none' : 'visible' },
       paint: { 'fill-color': '#fff', 'fill-opacity': 1, 'fill-antialias': false }
     }, firstLabelLayerId);
-    map.addSource('shapes-graph', { type: 'vector', url: `pmtiles://${APP_URLS.shapesGraph}` });
+    map.addSource('shapes-graph', { type: 'vector', url: `pmtiles://${withGtfsDay(APP_URLS.shapesGraph, this.gtfsDay())}` });
     map.addLayer({
       id: 'shapes-graph', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
       layout: {
@@ -324,18 +327,20 @@ export class MapComponent {
     this.fitStops();
   }
 
-  private async loadTripShape(tripId: string, signal: AbortSignal): Promise<void> {
+  private async loadTripShape(tripId: string, gtfsDay: string, signal: AbortSignal): Promise<void> {
     try {
-      let coordinates = this.shapeCache.get(tripId);
+      const cacheKey = `${gtfsDay}|${tripId}`;
+      let coordinates = this.shapeCache.get(cacheKey);
       if (!coordinates) {
-        const response = await fetch(`${APP_URLS.gtfsChTrips}/${encodeURIComponent(tripId)}/shape`, { signal });
+        const url = withGtfsDay(`${APP_URLS.gtfsChTrips}/${encodeURIComponent(tripId)}/shape`, gtfsDay);
+        const response = await fetch(url, { signal });
         if (!response.ok) return;
         coordinates = parseTripPolyline(await response.json());
         if (signal.aborted) return;
         if (this.shapeCache.size >= 100) this.shapeCache.delete(this.shapeCache.keys().next().value!);
-        this.shapeCache.set(tripId, coordinates);
+        this.shapeCache.set(cacheKey, coordinates);
       }
-      if (!signal.aborted) this.tripShape.set({ tripId, coordinates });
+      if (!signal.aborted) this.tripShape.set({ tripId, gtfsDay, coordinates });
     } catch {
       // Retain stop-to-stop beelines and straight-line position estimates if the shape is unavailable.
     }

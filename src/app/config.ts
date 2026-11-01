@@ -20,3 +20,9 @@ export const APP_URLS = {
     'https://tools.opentransportdata.swiss/data/actual_date_business_organisation_versions_LATEST.csv',
   goRealtime: 'https://tools.opentransportdata.swiss/data/go-realtime.csv'
 } as const;
+
+export function withGtfsDay(resourceUrl: string, gtfsDay: string): string {
+  const url = new URL(resourceUrl);
+  url.searchParams.set('gtfs_day', gtfsDay);
+  return url.toString();
+}

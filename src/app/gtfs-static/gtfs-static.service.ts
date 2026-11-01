@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { APP_URLS } from '../config';
+import { APP_URLS, withGtfsDay } from '../config';
 import { TripDetailResponseJSON } from './dto';
 
 @Injectable({ providedIn: 'root' })
@@ -11,7 +11,7 @@ export class GtfsStaticService {
     const cached = this.tripRequests.get(key);
     if (cached) return cached;
 
-    const request = this.fetchTrip(tripId).catch((error: unknown) => {
+    const request = this.fetchTrip(gtfsDay, tripId).catch((error: unknown) => {
       this.tripRequests.delete(key);
       throw error;
     });
@@ -19,8 +19,8 @@ export class GtfsStaticService {
     return request;
   }
 
-  private async fetchTrip(tripId: string): Promise<TripDetailResponseJSON> {
-    const url = `${APP_URLS.gtfsTrip}/${encodeURIComponent(tripId)}`;
+  private async fetchTrip(gtfsDay: string, tripId: string): Promise<TripDetailResponseJSON> {
+    const url = withGtfsDay(`${APP_URLS.gtfsTrip}/${encodeURIComponent(tripId)}`, gtfsDay);
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`GTFS trip request failed: ${response.status} ${response.statusText}`);
