@@ -1,5 +1,5 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, effect, ElementRef, inject, input, signal, viewChild } from '@angular/core';
-import type { FeatureCollection, Point } from 'geojson';
+import type { FeatureCollection, LineString, Point, Position } from 'geojson';
 import type { GeoJSONSource, Map as LibreMap, Popup } from 'maplibre-gl';
 import { APP_URLS } from '../config';
 import { MapService } from './map.service';
@@ -71,7 +71,7 @@ import type { MapStop } from './map-stop.model';
 export class MapComponent {
   private readonly excludedBasemapLayerIds: readonly string[] = ['landcover_wood', 'park'];
   readonly stops = input<readonly MapStop[]>([]);
-  readonly selectedEdgeIds = input<readonly number[]>([]);
+  readonly tripId = input<string>();
   readonly resultEdgeIds = input<readonly number[]>([]);
   readonly resultShapesStatus = input<'loading' | 'ready' | 'error'>('loading');
   readonly resultShapesError = input<string>();
@@ -87,14 +87,26 @@ export class MapComponent {
   private libreMap?: LibreMap;
   private popup?: Popup;
   private stopData: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] };
+  private routeData: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] };
+  private readonly tripShape = signal<{ tripId: string; coordinates: Position[] } | undefined>(undefined);
+  private readonly shapeCache = new Map<string, Position[]>();
   private loadTimeout?: ReturnType<typeof setTimeout>;
   private appliedResultEdgeIds = new Set<number>();
-  private appliedSelectedEdgeIds = new Set<number>();
 
   constructor() {
     effect(() => this.updateResultShapeEdges(this.resultEdgeIds()));
-    effect(() => this.updateSelectedShapeEdges(this.selectedEdgeIds()));
-    effect(() => this.setStops(this.stops()));
+    effect(onCleanup => {
+      const tripId = this.tripId()?.trim();
+      this.tripShape.set(undefined);
+      if (!tripId || tripId === '—') return;
+      const controller = new AbortController();
+      onCleanup(() => controller.abort());
+      void this.loadTripShape(tripId, controller.signal);
+    });
+    effect(() => {
+      const shape = this.tripShape();
+      this.setStops(this.stops(), shape?.tripId === this.tripId()?.trim() ? shape?.coordinates : undefined);
+    });
     afterNextRender(() => void this.initialize());
     this.destroyRef.onDestroy(() => {
       clearTimeout(this.loadTimeout);
@@ -110,7 +122,6 @@ export class MapComponent {
     this.popup = undefined;
     this.libreMap = undefined;
     this.appliedResultEdgeIds.clear();
-    this.appliedSelectedEdgeIds.clear();
     this.state.set('loading');
     this.graphError.set(false);
     this.loadTimeout = setTimeout(() => this.state.set('error'), 20_000);
@@ -146,7 +157,7 @@ export class MapComponent {
   }
 
   private applySelectedTripVisibility(): void {
-    for (const layerId of ['trip-route-casing', 'trip-route', 'trip-stops', 'trip-stop-numbers']) {
+    for (const layerId of ['trip-route-casing', 'trip-route', 'trip-stops', 'trip-stop-numbers', 'trip-position-halo', 'trip-position', 'trip-position-label']) {
       if (this.libreMap?.getLayer(layerId)) {
         this.libreMap.setLayoutProperty(layerId, 'visibility', this.selectedTripVisible() ? 'visible' : 'none');
       }
@@ -171,10 +182,6 @@ export class MapComponent {
 
   private updateResultShapeEdges(edgeIds: readonly number[]): void {
     this.appliedResultEdgeIds = this.updateShapeEdges(edgeIds, 'inResults', this.appliedResultEdgeIds);
-  }
-
-  private updateSelectedShapeEdges(edgeIds: readonly number[]): void {
-    this.appliedSelectedEdgeIds = this.updateShapeEdges(edgeIds, 'selectedTrip', this.appliedSelectedEdgeIds);
   }
 
   private updateShapeEdges(edgeIds: readonly number[], stateKey: string, previous: Set<number>): Set<number> {
@@ -246,23 +253,21 @@ export class MapComponent {
       }
     });
     this.updateResultShapeEdges(this.resultEdgeIds());
+    map.addSource('trip-route', { type: 'geojson', data: this.routeData });
     map.addLayer({
-      id: 'trip-route-casing', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
+      id: 'trip-route-casing', type: 'line', source: 'trip-route',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
-        'line-color': '#fff', 'line-width': 8,
-        'line-opacity': ['case', ['boolean', ['feature-state', 'selectedTrip'], false], 1, 0]
+        'line-color': '#fff', 'line-width': 8
       }
     });
     map.addLayer({
-      id: 'trip-route', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
+      id: 'trip-route', type: 'line', source: 'trip-route',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
-        'line-color': '#357abd', 'line-width': 5,
-        'line-opacity': ['case', ['boolean', ['feature-state', 'selectedTrip'], false], 0.9, 0]
+        'line-color': '#357abd', 'line-width': 5, 'line-opacity': 0.9
       }
     });
-    this.updateSelectedShapeEdges(this.selectedEdgeIds());
     map.addSource('trip-stops', { type: 'geojson', data: this.stopData });
     map.addLayer({
       id: 'trip-stops', type: 'circle', source: 'trip-stops',
@@ -295,7 +300,24 @@ export class MapComponent {
     this.fitStops();
   }
 
-  private setStops(stops: readonly MapStop[]): void {
+  private async loadTripShape(tripId: string, signal: AbortSignal): Promise<void> {
+    try {
+      let coordinates = this.shapeCache.get(tripId);
+      if (!coordinates) {
+        const response = await fetch(`${APP_URLS.gtfsChTrips}/${encodeURIComponent(tripId)}/shape`, { signal });
+        if (!response.ok) return;
+        coordinates = parseTripPolyline(await response.json());
+        if (signal.aborted) return;
+        if (this.shapeCache.size >= 100) this.shapeCache.delete(this.shapeCache.keys().next().value!);
+        this.shapeCache.set(tripId, coordinates);
+      }
+      if (!signal.aborted) this.tripShape.set({ tripId, coordinates });
+    } catch {
+      // Retain stop-to-stop beelines and straight-line position estimates if the shape is unavailable.
+    }
+  }
+
+  private setStops(stops: readonly MapStop[], shape?: Position[]): void {
     this.popup?.remove();
     this.popup = undefined;
     this.stopData = {
@@ -306,9 +328,22 @@ export class MapComponent {
           || !Number.isFinite(longitude) || !Number.isFinite(latitude)
           || Math.abs(longitude) > 180 || Math.abs(latitude) > 85) return [];
         return [{ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [longitude, latitude] },
-          properties: { name: stop.name, stopId: stop.stopId, sequence: stop.sequence ?? index + 1 } }];
+          properties: { name: stop.name, stopId: stop.stopId, sequence: stop.sequence ?? index + 1, stopIndex: index } }];
       })
     };
+    this.routeData = {
+      type: 'FeatureCollection',
+      features: shape ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: shape } }]
+      : this.stopData.features.flatMap((feature, index) => {
+        const next = this.stopData.features[index + 1];
+        if (!next || next.properties?.['stopIndex'] !== feature.properties?.['stopIndex'] + 1) return [];
+        return [{
+          type: 'Feature' as const, properties: {},
+          geometry: { type: 'LineString' as const, coordinates: [feature.geometry.coordinates, next.geometry.coordinates] }
+        }];
+      })
+    };
+    this.libreMap?.getSource<GeoJSONSource>('trip-route')?.setData(this.routeData);
     this.libreMap?.getSource<GeoJSONSource>('trip-stops')?.setData(this.stopData);
     this.fitStops();
   }
@@ -325,6 +360,7 @@ export class MapComponent {
       north = Math.max(north, point[1]);
     };
     this.stopData.features.forEach(feature => extend(feature.geometry.coordinates));
+    this.routeData.features.forEach(feature => feature.geometry.coordinates.forEach(extend));
     if (!Number.isFinite(west)) return;
     this.libreMap?.fitBounds([
       [west, south],
