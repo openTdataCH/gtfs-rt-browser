@@ -1,6 +1,12 @@
 import type { Position } from 'geojson';
 import type { MapStop } from './map-stop.model';
 
+export interface TripPositionUpdate {
+  readonly tripId: string | undefined;
+  readonly minute: number | undefined;
+  readonly coordinates: Position | undefined;
+}
+
 export function validPosition(point: unknown): point is Position {
   return Array.isArray(point) && point.length >= 2
     && typeof point[0] === 'number' && Number.isFinite(point[0]) && Math.abs(point[0]) <= 180

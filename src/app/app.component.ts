@@ -3,8 +3,10 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
+import type { Position } from 'geojson';
 import { APP_URLS } from './config';
 import { MapComponent } from './map/map.component';
+import type { TripPositionUpdate } from './map/trip-position';
 import { resultShapeEdgeIds, type ShapesGraphMappings } from './map/shapes-graph';
 import { FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
@@ -140,6 +142,7 @@ export class AppComponent {
   protected readonly shapesGraphError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
+  protected readonly selectedPosition = signal<TripPositionUpdate | undefined>(undefined);
   protected readonly searchTerm = signal(this.initialQuery.get('q') ?? '');
   protected readonly agencyFilter = signal('');
   protected readonly agencySort = signal<'name' | 'count'>('count');
@@ -329,7 +332,9 @@ export class AppComponent {
   });
   protected readonly selectedPositionMinute = computed(() => {
     const item = this.selected();
-    return item && !item.cancelled ? this.nowDayMinute() : undefined;
+    const feedDay = this.metadata()?.feedDay;
+    return item && !item.cancelled && feedDay
+      ? swissDayMinute(this.browserNow() / 1_000, feedDay) : undefined;
   });
   protected readonly selectedStaticTripState = computed<StaticTripState>(() => {
     const item = this.selected();
@@ -401,9 +406,10 @@ export class AppComponent {
     };
   });
   protected readonly selectedMapUrl = computed(() => {
-    const item = this.selected();
-    if (!item || this.timelineStatus() !== 'ready' || !this.isActiveAtNow(item)) return undefined;
-    return approximateTripMapUrl(this.stopTableRows(), this.nowDayMinute());
+    const position = this.selectedPosition();
+    if (!position?.coordinates || position.tripId !== this.selected()?.tripId
+      || position.minute !== this.selectedPositionMinute()) return undefined;
+    return trafimageMapUrl(position.coordinates);
   });
 
   protected readonly ojpSearchUrl = computed(() => {
@@ -498,7 +504,7 @@ export class AppComponent {
     const clock = window.setInterval(() => {
       const now = Date.now();
       this.browserNow.set(now);
-    }, 30_000);
+    }, 1_000);
     this.destroyRef.onDestroy(() => window.clearInterval(clock));
     this.destroyRef.onDestroy(() => window.clearTimeout(this.filterResetTimer));
     effect(() => {
@@ -961,33 +967,7 @@ function stopProgressMinute(
     scheduledDeparture ?? scheduledArrival, startDate, feedDay);
 }
 
-function approximateTripMapUrl(rows: readonly StopTableRow[], now: number): string | undefined {
-  const stops = rows.filter((row) => row.longitude !== undefined && row.latitude !== undefined
-    && Number.isFinite(row.longitude) && Number.isFinite(row.latitude)
-    && Math.abs(row.latitude) < 85
-    && (row.arrivalMinute !== undefined || row.departureMinute !== undefined))
-    .sort((left, right) => (left.arrivalMinute ?? left.departureMinute!)
-      - (right.arrivalMinute ?? right.departureMinute!));
-  if (!stops.length) return undefined;
-
-  // Same straight-line, stop-to-stop approximation as the showcases Trip.computeMapURL helper.
-  let longitude = stops[0].longitude!;
-  let latitude = stops[0].latitude!;
-  for (let index = 1; index < stops.length; index += 1) {
-    const previous = stops[index - 1];
-    const next = stops[index];
-    const arrival = next.arrivalMinute ?? next.departureMinute!;
-    if (now < arrival) {
-      const departure = previous.departureMinute ?? previous.arrivalMinute!;
-      const fraction = arrival > departure ? Math.max(0, Math.min(1, (now - departure) / (arrival - departure))) : 0;
-      longitude = previous.longitude! + fraction * (next.longitude! - previous.longitude!);
-      latitude = previous.latitude! + fraction * (next.latitude! - previous.latitude!);
-      break;
-    }
-    longitude = next.longitude!;
-    latitude = next.latitude!;
-  }
-
+function trafimageMapUrl([longitude, latitude]: Position): string {
   const radius = 6_378_137;
   const x = radius * longitude * Math.PI / 180;
   const y = radius * Math.log(Math.tan(Math.PI / 4 + latitude * Math.PI / 360));

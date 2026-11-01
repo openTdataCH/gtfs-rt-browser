@@ -1,10 +1,10 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, effect, ElementRef, inject, input, signal, viewChild } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, effect, ElementRef, inject, input, output, signal, viewChild } from '@angular/core';
 import type { FeatureCollection, LineString, Point, Position } from 'geojson';
 import type { GeoJSONSource, Map as LibreMap, Popup } from 'maplibre-gl';
 import { APP_URLS } from '../config';
 import { MapService } from './map.service';
 import type { MapStop } from './map-stop.model';
-import { estimateTripPosition, parseTripPolyline } from './trip-position';
+import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from './trip-position';
 
 @Component({
   selector: 'app-map',
@@ -74,6 +74,7 @@ export class MapComponent {
   readonly stops = input<readonly MapStop[]>([]);
   readonly tripId = input<string>();
   readonly positionMinute = input<number>();
+  readonly estimatedPositionChange = output<TripPositionUpdate>();
   readonly resultEdgeIds = input<readonly number[]>([]);
   readonly resultShapesStatus = input<'loading' | 'ready' | 'error'>('loading');
   readonly resultShapesError = input<string>();
@@ -119,6 +120,7 @@ export class MapComponent {
         features: position ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: position } }] : []
       };
       this.libreMap?.getSource<GeoJSONSource>('trip-position')?.setData(this.positionData);
+      this.estimatedPositionChange.emit({ tripId: this.tripId(), minute: this.positionMinute(), coordinates: position });
     });
     afterNextRender(() => void this.initialize());
     this.destroyRef.onDestroy(() => {
