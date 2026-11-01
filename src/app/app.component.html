@@ -396,6 +396,9 @@
                 <dt>Route type</dt><dd>{{ routeTypeLabel(route.route_type) }}</dd>
               }
               @if (selectedStaticTrip(); as staticTrip) {
+                @if (staticTrip.trip_short_name.trim(); as tripShortName) {
+                  <dt>trip.trip_short_name</dt><dd><span class="select-whole-id">{{ tripShortName }}</span></dd>
+                }
                 <dt>trip.direction_id</dt><dd>{{ staticTrip.direction_id || '—' }}</dd>
                 <dt>trip.hints</dt><dd>{{ staticTrip.hints || '—' }}</dd>
               }
