@@ -390,7 +390,10 @@ export class MapComponent {
     };
     this.stopData.features.forEach(feature => extend(feature.geometry.coordinates));
     this.routeData.features.forEach(feature => feature.geometry.coordinates.forEach(extend));
-    if (!Number.isFinite(west)) return;
+    if (!Number.isFinite(west)) {
+      this.mapService.resetView();
+      return;
+    }
     this.libreMap?.fitBounds([
       [west, south],
       [east, north]
