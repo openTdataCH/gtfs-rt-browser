@@ -37,6 +37,7 @@
 .timeline-controls { flex: 0 0 auto; }
 .timeline-controls.controls-collapsed { display: none; }
 .timeline-viewport { position: relative; }
+.timeline-empty-state { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; text-align: center; }
 .timeline-fetch-overlay {
   position: absolute; inset: 0 0 0 20rem; z-index: 7;
   display: flex; align-items: center; justify-content: center;
@@ -173,6 +174,7 @@ th { white-space: nowrap; background: #f8f9fa; }
 
 @media (min-width: 768px) and (max-width: 1199.98px) {
   .workspace { display: grid !important; grid-template-columns: minmax(0, 1fr) 500px; grid-template-rows: minmax(0, 1fr) 16rem; }
+  .workspace.workspace-no-selection { grid-template-columns: minmax(0, 1fr); }
   .map-pane { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #dee2e6; }
 }
 

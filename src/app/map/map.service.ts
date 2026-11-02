@@ -2,6 +2,10 @@ import { Injectable } from '@angular/core';
 import type { ErrorEvent, Map as LibreMap, Popup, StyleSpecification } from 'maplibre-gl';
 
 let protocolRegistered = false;
+const DEFAULT_BOUNDS: [[number, number], [number, number]] = [
+  [5.9559, 45.8179],
+  [10.4921, 47.8085]
+];
 
 @Injectable()
 export class MapService {
@@ -32,8 +36,8 @@ export class MapService {
     const map = new mapgl.Map({
       container,
       style,
-      center: [8.23, 46.82],
-      zoom: 6.5,
+      bounds: DEFAULT_BOUNDS,
+      fitBoundsOptions: { padding: 20 },
       attributionControl: { compact: true }
     });
     this.map = map;
@@ -44,6 +48,10 @@ export class MapService {
     this.resizeObserver = new ResizeObserver(() => map.resize());
     this.resizeObserver.observe(container);
     return { map, Popup: mapgl.Popup };
+  }
+
+  resetView(): void {
+    this.map?.fitBounds(DEFAULT_BOUNDS, { padding: 20, duration: 0 });
   }
 
   destroy(): void {
