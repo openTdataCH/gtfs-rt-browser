@@ -104,13 +104,13 @@
           </div>
           <div class="timeline-shared-filters border-bottom bg-white px-3 py-2" aria-label="GTFS-RT and GTFS-S filters">
             <div class="agency-filter input-group input-group-sm">
-              <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
-                <option value="">All agencies ({{ agencyOptions().length | number }})</option>
+              <select class="form-select agency-select" aria-label="Agency" (change)="updateAgency($event)">
+                <option value="" [selected]="agencyFilter() === ''">All agencies ({{ agencyOptions().length | number }})</option>
                 @if (unmatchedAgency(); as agency) {
-                  <option [value]="agency" disabled>Agency not found: {{ agency }}</option>
+                  <option [value]="agency" [selected]="agencyFilter() === agency" disabled>Agency not found: {{ agency }}</option>
                 }
                 @for (agency of agencyOptions(); track agency.id) {
-                  <option [value]="agency.id">{{ agency.name }} ({{ agency.count | number }})</option>
+                  <option [value]="agency.id" [selected]="agencyFilter() === agency.id">{{ agency.name }} ({{ agency.count | number }})</option>
                 }
               </select>
               <button type="button" class="btn agency-sort-button" [class.btn-primary]="agencySort() === 'count'"
