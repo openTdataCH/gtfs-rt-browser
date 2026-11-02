@@ -128,6 +128,8 @@ async function parseFeed(url: string): Promise<void> {
     };
 
     assertAgencySourcesPresent(tripEntities, lookupIndex);
+    postMessage({ type: 'agency-lookup', agenciesById: lookupIndex.agencies,
+      organisationsByAgencyId: businessOrganisations });
 
     for (let index = 0; index < tripEntities.length; index += CHUNK_SIZE) {
       const updates = tripEntities.slice(index, index + CHUNK_SIZE)

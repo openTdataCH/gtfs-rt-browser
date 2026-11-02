@@ -1,11 +1,12 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { GtfsDayTripTimelineRow, RouteJSON, StopJSON } from '../../gtfs-static/dto';
-import { FeedMetadataDto, TripTimelineUpdateDto, TripUpdateDto } from '../dto';
+import { AgencyJSON, GtfsDayTripTimelineRow, RouteJSON, StopJSON } from '../../gtfs-static/dto';
+import { BusinessOrganisationDto, FeedMetadataDto, TripTimelineUpdateDto, TripUpdateDto } from '../dto';
 import { TripUpdate } from '../models';
 import type { ShapesGraphMappings } from '../../map/shapes-graph';
 
 export type GtfsRtStreamEvent =
+  | { type: 'agency-lookup'; agenciesById: ReadonlyMap<string, AgencyJSON>; organisationsByAgencyId: ReadonlyMap<string, BusinessOrganisationDto> }
   | { type: 'shapes-graph'; mappings: ShapesGraphMappings }
   | { type: 'shapes-graph-error'; message: string }
   | { type: 'metadata'; metadata: FeedMetadataDto }
@@ -19,6 +20,7 @@ export type GtfsRtStreamEvent =
   | { type: 'stops-error'; message: string };
 
 type WorkerResponse =
+  | { type: 'agency-lookup'; agenciesById: Map<string, AgencyJSON>; organisationsByAgencyId: Map<string, BusinessOrganisationDto> }
   | { type: 'shapes-graph'; mappings: ShapesGraphMappings }
   | { type: 'shapes-graph-error'; message: string }
   | { type: 'metadata'; metadata: FeedMetadataDto }
