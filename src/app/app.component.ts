@@ -145,6 +145,7 @@ export class AppComponent {
   protected readonly selectedPosition = signal<TripPositionUpdate | undefined>(undefined);
   protected readonly searchTerm = signal(this.initialQuery.get('q') ?? '');
   protected readonly agencyFilter = signal('');
+  protected readonly unmatchedAgency = signal<string | undefined>(undefined);
   protected readonly agencySort = signal<'name' | 'count'>('count');
   protected readonly routeTypeFilter = signal(routeTypeFromQuery(this.initialQuery.get('route_type')));
   protected readonly relationshipFilter = signal(statusFromQuery(this.initialQuery.get('status')));
@@ -629,6 +630,7 @@ export class AppComponent {
     window.clearTimeout(this.filterResetTimer);
     this.activeView.set(view);
     this.agencyFilter.set('');
+    this.unmatchedAgency.set(undefined);
     this.showStaticOnlyTrips.set(false);
     this.setQueryParam('agency', '');
     this.routeTypeFilter.set('');
@@ -688,6 +690,7 @@ export class AppComponent {
   }
   protected applyAgencyFilter(agency: string, updateUrl = true): void {
     this.agencyFilter.set(agency);
+    this.unmatchedAgency.set(undefined);
     if (!agency) this.showStaticOnlyTrips.set(false);
     this.pendingAgency = undefined;
     if (updateUrl) this.setQueryParam('agency', agency);
@@ -702,7 +705,8 @@ export class AppComponent {
     const items = this.items();
     const bySboid = items.find((item) => item.dto.businessOrganisation?.sboid === requested);
     const match = bySboid ?? items.find((item) => item.agencyId === requested);
-    if (match) this.applyAgencyFilter(match.agencyId, false);
+    this.applyAgencyFilter(match?.agencyId ?? requested, false);
+    if (!match) this.unmatchedAgency.set(requested);
   }
   protected updateRouteType(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;

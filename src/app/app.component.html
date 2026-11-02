@@ -50,7 +50,7 @@
         @else { <span class="text-secondary">No TripUpdate messages are available.</span> }
       </section>
     } @else {
-      <div class="workspace d-flex flex-grow-1 overflow-hidden">
+      <div class="workspace d-flex flex-grow-1 overflow-hidden" [class.workspace-no-selection]="!selected()">
         @if (activeView() === 'timeline') {
         <section class="timeline-pane d-flex flex-column flex-grow-1 overflow-hidden" aria-label="Trip timeline">
           <button type="button" class="timeline-controls-toggle btn btn-light btn-sm" (click)="toggleTimelineControls()"
@@ -106,6 +106,9 @@
             <div class="agency-filter input-group input-group-sm">
               <select class="form-select agency-select" aria-label="Agency" [value]="agencyFilter()" (change)="updateAgency($event)">
                 <option value="">All agencies ({{ agencyOptions().length | number }})</option>
+                @if (unmatchedAgency(); as agency) {
+                  <option [value]="agency" disabled>Agency not found: {{ agency }}</option>
+                }
                 @for (agency of agencyOptions(); track agency.id) {
                   <option [value]="agency.id">{{ agency.name }} ({{ agency.count | number }})</option>
                 }
@@ -185,6 +188,12 @@
           </div>
           </div>
           <div class="timeline-viewport flex-grow-1">
+          @if (parseState().status === 'complete' && timelineStatus() !== 'loading' && !filteredItems().length) {
+            <div class="timeline-empty-state small text-secondary bg-white p-3" role="status">
+              @if (unmatchedAgency(); as agency) { Agency “{{ agency }}” was not found in this feed. }
+              @else { No trips match these filters. }
+            </div>
+          }
           <div #timelineScroll class="timeline-scroll h-100 overflow-auto">
             <div class="timeline-table" [style.--timeline-width.px]="timeline().width">
               <div class="timeline-corner border-end border-bottom bg-white">
@@ -324,7 +333,7 @@
         </section>
         }
 
-        <aside class="detail-pane flex-grow-1 bg-white p-4" aria-label="Selected trip update">
+        <aside class="detail-pane flex-grow-1 bg-white p-4" [class.d-none]="!selected()" aria-label="Selected trip update">
           @if (selected(); as item) {
             <div class="detail-summary">
             <div class="d-flex align-items-center gap-3 mb-4">
