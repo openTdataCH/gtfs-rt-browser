@@ -1,3 +1,5 @@
+import type { Geometry } from 'geojson';
+
 export interface ShapesGraphMappings {
   readonly shapeIdsByTripId: ReadonlyMap<string, number>;
   readonly edgeIdsByShapeId: ReadonlyMap<number, readonly number[]>;
@@ -52,4 +54,59 @@ export function resultShapeEdgeIds(tripIds: Iterable<string>, mappings?: ShapesG
     for (const edgeId of mappings.edgeIdsByShapeId.get(shapeId) ?? []) edgeIds.add(edgeId);
   }
   return [...edgeIds];
+}
+
+export function agencyShapeEdgeIds(
+  trips: Iterable<{ readonly trip_id: string; readonly route_rowid: number }>,
+  routes: Iterable<{ readonly rowid: number; readonly agency_id: string }>,
+  mappings: ShapesGraphMappings
+): ReadonlyMap<string, readonly number[]> {
+  const agencyByRoute = new Map([...routes].map(route => [route.rowid, route.agency_id]));
+  const shapeIdsByAgency = new Map<string, Set<number>>();
+  for (const trip of trips) {
+    const agencyId = agencyByRoute.get(trip.route_rowid);
+    if (agencyId === undefined) continue;
+    let shapeIds = shapeIdsByAgency.get(agencyId);
+    if (!shapeIds) {
+      shapeIds = new Set();
+      shapeIdsByAgency.set(agencyId, shapeIds);
+    }
+    const shapeId = mappings.shapeIdsByTripId.get(trip.trip_id);
+    if (shapeId !== undefined) shapeIds.add(shapeId);
+  }
+  const edgesByAgency = new Map<string, readonly number[]>();
+  for (const [agencyId, shapeIds] of shapeIdsByAgency) {
+    const edgeIds = new Set<number>();
+    for (const shapeId of shapeIds) {
+      for (const edgeId of mappings.edgeIdsByShapeId.get(shapeId) ?? []) edgeIds.add(edgeId);
+    }
+    edgesByAgency.set(agencyId, [...edgeIds]);
+  }
+  return edgesByAgency;
+}
+
+export function shapeEdgeBounds(
+  features: Iterable<{ readonly id?: string | number; readonly geometry: Geometry }>,
+  edgeIds: ReadonlySet<number>
+): [[number, number], [number, number]] | undefined {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  for (const feature of features) {
+    if (feature.id === undefined || !edgeIds.has(Number(feature.id))) continue;
+    const geometry = feature.geometry;
+    const lines = geometry.type === 'LineString' ? [geometry.coordinates]
+      : geometry.type === 'MultiLineString' ? geometry.coordinates : [];
+    for (const line of lines) {
+      for (const [longitude, latitude] of line) {
+        if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) continue;
+        west = Math.min(west, longitude);
+        south = Math.min(south, latitude);
+        east = Math.max(east, longitude);
+        north = Math.max(north, latitude);
+      }
+    }
+  }
+  return Number.isFinite(west) ? [[west, south], [east, north]] : undefined;
 }

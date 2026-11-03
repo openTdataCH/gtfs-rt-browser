@@ -4,6 +4,7 @@ import type { GeoJSONSource, Map as LibreMap, Popup } from 'maplibre-gl';
 import { APP_URLS, withGtfsDay } from '../config';
 import { MapService } from './map.service';
 import type { MapStop } from './map-stop.model';
+import { shapeEdgeBounds } from './shapes-graph';
 import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from './trip-position';
 
 @Component({
@@ -17,15 +18,24 @@ import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from
         <div class="layer-manager-heading">Layers</div>
         <label>
           <input type="checkbox" [checked]="selectedTripVisible()" (change)="updateSelectedTripVisibility($event)">
+          <svg class="layer-swatch" viewBox="0 0 26 18" aria-hidden="true" focusable="false" [style.color]="layerColors.selected">
+            <polyline points="2,14 9,4 17,14 24,4" />
+          </svg>
           <span>Selected Trip</span>
         </label>
         <label>
           <input type="checkbox" [checked]="resultShapesVisible()" (change)="updateResultShapesVisibility($event)">
+          <svg class="layer-swatch" viewBox="0 0 26 18" aria-hidden="true" focusable="false" [style.color]="layerColors.filtered">
+            <polyline points="2,14 9,4 17,14 24,4" />
+          </svg>
           <span>Filtered Trips</span>
         </label>
         <label>
           <input type="checkbox" [checked]="shapesVisible()" (change)="updateShapesVisibility($event)">
-          <span>GTFS-S Shapes</span>
+          <svg class="layer-swatch" viewBox="0 0 26 18" aria-hidden="true" focusable="false" [style.color]="layerColors.shapes">
+            <polyline points="2,14 9,4 17,14 24,4" />
+          </svg>
+          <span>GTFS-S Shapes@if (agencyCode(); as code) { ({{ code }} · {{ agencyId() }}) }</span>
         </label>
         @if (resultShapesStatus() === 'loading') {
           <div class="layer-status text-secondary" role="status">Loading filtered trip shapes…</div>
@@ -34,6 +44,9 @@ import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from
         }
         <label>
           <input type="checkbox" [checked]="backgroundMapsVisible()" (change)="updateBackgroundMapsVisibility($event)">
+          <svg class="layer-swatch" viewBox="0 0 26 18" aria-hidden="true" focusable="false" [style.color]="layerColors.background">
+            <rect x="5" y="1" width="16" height="16" />
+          </svg>
           <span>Background Map</span>
         </label>
       </div>
@@ -62,6 +75,10 @@ import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from
     .layer-manager label { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
     .layer-manager label + label { margin-top: .25rem; }
     .layer-manager input { margin: 0; accent-color: #357abd; }
+    .layer-swatch { width: 1.5rem; height: 1rem; flex: 0 0 auto; }
+    .layer-swatch polyline { fill: none; stroke: currentColor; stroke-width: 3;
+      stroke-linecap: round; stroke-linejoin: round; }
+    .layer-swatch rect { fill: #eef1f4; stroke: currentColor; stroke-width: 1; }
     .layer-status { margin: .25rem 0; max-width: 13rem; font-size: .75rem; }
     .graph-status { position: absolute; bottom: 2rem; left: .5rem;
       padding: .25rem .5rem; border-radius: .25rem; background: #ffffffed; }
@@ -70,6 +87,9 @@ import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from
   `
 })
 export class MapComponent {
+  protected readonly layerColors = {
+    selected: '#357abd', filtered: '#e58b24', shapes: '#8060b3', background: '#9da4aa'
+  } as const;
   private readonly excludedBasemapLayerIds: readonly string[] = ['landcover_wood', 'park'];
   readonly stops = input<readonly MapStop[]>([]);
   readonly tripId = input<string>();
@@ -77,6 +97,10 @@ export class MapComponent {
   readonly positionMinute = input<number>();
   readonly estimatedPositionChange = output<TripPositionUpdate>();
   readonly resultEdgeIds = input<readonly number[]>([]);
+  readonly agencyEdgeIds = input<readonly number[] | undefined>(undefined);
+  readonly agencyCode = input<string>();
+  readonly agencyId = input<string>();
+  readonly tripFocusRequest = input(0);
   readonly resultShapesStatus = input<'loading' | 'ready' | 'error'>('loading');
   readonly resultShapesError = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
@@ -97,9 +121,42 @@ export class MapComponent {
   private readonly shapeCache = new Map<string, Position[]>();
   private loadTimeout?: ReturnType<typeof setTimeout>;
   private appliedResultEdgeIds = new Set<number>();
+  private appliedAgencyEdgeIds = new Set<number>();
+  private agencyOverviewActive = false;
+  private cameraAgencyId?: string;
+  private focusedTripId?: string;
+  private lastTripFocusRequest?: number;
+  private cancelAgencyFit?: () => void;
 
   constructor() {
     effect(() => this.updateResultShapeEdges(this.resultEdgeIds()));
+    effect(() => this.updateAgencyShapeEdges(this.agencyEdgeIds()));
+    effect(() => {
+      const agencyId = this.agencyId() ?? '';
+      const edgeIds = this.agencyEdgeIds();
+      if (agencyId !== this.cameraAgencyId) {
+        this.cameraAgencyId = agencyId;
+        this.focusedTripId = undefined;
+      }
+      // Late agency data must not override a trip the user already clicked.
+      if (this.focusedTripId !== undefined) return;
+      this.agencyOverviewActive = Boolean(agencyId && agencyId !== '_no_agency');
+      this.fitAgency(edgeIds);
+      if (!this.agencyOverviewActive) this.mapService.resetView();
+    });
+    effect(() => {
+      const request = this.tripFocusRequest();
+      if (this.lastTripFocusRequest === undefined) {
+        this.lastTripFocusRequest = request;
+        return;
+      }
+      if (request === this.lastTripFocusRequest) return;
+      this.lastTripFocusRequest = request;
+      this.focusedTripId = this.tripId();
+      this.agencyOverviewActive = false;
+      this.cancelAgencyFit?.();
+      this.fitStops();
+    });
     effect(onCleanup => {
       const tripId = this.tripId()?.trim();
       const gtfsDay = this.gtfsDay();
@@ -127,6 +184,7 @@ export class MapComponent {
     });
     afterNextRender(() => void this.initialize());
     this.destroyRef.onDestroy(() => {
+      this.cancelAgencyFit?.();
       clearTimeout(this.loadTimeout);
       this.popup?.remove();
       this.libreMap = undefined;
@@ -135,11 +193,13 @@ export class MapComponent {
   }
 
   protected async initialize(): Promise<void> {
+    this.cancelAgencyFit?.();
     clearTimeout(this.loadTimeout);
     this.popup?.remove();
     this.popup = undefined;
     this.libreMap = undefined;
     this.appliedResultEdgeIds.clear();
+    this.appliedAgencyEdgeIds.clear();
     this.state.set('loading');
     this.graphError.set(false);
     this.loadTimeout = setTimeout(() => this.state.set('error'), 20_000);
@@ -187,6 +247,7 @@ export class MapComponent {
     this.shapesVisible.set(visible);
     if (this.libreMap?.getLayer('shapes-graph')) {
       this.libreMap.setLayoutProperty('shapes-graph', 'visibility', visible ? 'visible' : 'none');
+      if (visible && this.agencyOverviewActive) this.fitAgency(this.agencyEdgeIds());
     }
   }
 
@@ -198,8 +259,39 @@ export class MapComponent {
     }
   }
 
+  private fitAgency(edgeIds: readonly number[] | undefined): void {
+    this.cancelAgencyFit?.();
+    this.cancelAgencyFit = undefined;
+    const map = this.libreMap;
+    if (!map || !this.agencyOverviewActive || !map.getSource('shapes-graph')) return;
+    if (!edgeIds?.length) {
+      this.mapService.resetView();
+      return;
+    }
+    const ids = new Set(edgeIds);
+    const fit = () => {
+      this.cancelAgencyFit = undefined;
+      if (this.libreMap !== map || !this.agencyOverviewActive) return;
+      const bounds = shapeEdgeBounds(map.querySourceFeatures('shapes-graph', { sourceLayer: 'trgraph' }), ids);
+      if (bounds) map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
+    };
+    // Load the national extent first; querying tiles in a previous trip's viewport
+    // would measure only a clipped part of the next agency's network.
+    map.once('idle', fit);
+    this.cancelAgencyFit = () => map.off('idle', fit);
+    this.mapService.resetView();
+  }
+
   private updateResultShapeEdges(edgeIds: readonly number[]): void {
     this.appliedResultEdgeIds = this.updateShapeEdges(edgeIds, 'inResults', this.appliedResultEdgeIds);
+  }
+
+  private updateAgencyShapeEdges(edgeIds: readonly number[] | undefined): void {
+    this.appliedAgencyEdgeIds = this.updateShapeEdges(edgeIds ?? [], 'inAgency', this.appliedAgencyEdgeIds);
+    if (this.libreMap?.getLayer('shapes-graph')) {
+      this.libreMap.setPaintProperty('shapes-graph', 'line-opacity', edgeIds === undefined ? 0.5
+        : ['case', ['boolean', ['feature-state', 'inAgency'], false], 0.5, 0]);
+    }
   }
 
   private updateShapeEdges(edgeIds: readonly number[], stateKey: string, previous: Set<number>): Set<number> {
@@ -253,11 +345,13 @@ export class MapComponent {
         visibility: this.shapesVisible() ? 'visible' : 'none'
       },
       paint: {
-        'line-color': '#7b8794',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 14, 2],
-        'line-opacity': 0.5
+        'line-color': this.layerColors.shapes,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 14, 4],
+        'line-opacity': this.agencyEdgeIds() === undefined ? 0.5
+          : ['case', ['boolean', ['feature-state', 'inAgency'], false], 0.5, 0]
       }
     });
+    this.updateAgencyShapeEdges(this.agencyEdgeIds());
     map.addLayer({
       id: 'result-shapes', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
       layout: {
@@ -265,7 +359,7 @@ export class MapComponent {
         visibility: this.resultShapesVisible() ? 'visible' : 'none'
       },
       paint: {
-        'line-color': '#e58b24',
+        'line-color': this.layerColors.filtered,
         'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 14, 3.5],
         'line-opacity': ['case', ['boolean', ['feature-state', 'inResults'], false], 0.9, 0]
       }
@@ -283,7 +377,7 @@ export class MapComponent {
       id: 'trip-route', type: 'line', source: 'trip-route',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
-        'line-color': '#357abd', 'line-width': 5, 'line-opacity': 0.9
+        'line-color': this.layerColors.selected, 'line-width': 5, 'line-opacity': 0.9
       }
     });
     map.addSource('trip-stops', { type: 'geojson', data: this.stopData });
@@ -325,6 +419,7 @@ export class MapComponent {
     map.on('mouseenter', 'trip-stops', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'trip-stops', () => { map.getCanvas().style.cursor = ''; });
     this.fitStops();
+    this.fitAgency(this.agencyEdgeIds());
   }
 
   private async loadTripShape(tripId: string, gtfsDay: string, signal: AbortSignal): Promise<void> {
@@ -378,6 +473,13 @@ export class MapComponent {
   }
 
   private fitStops(): void {
+    if (this.agencyOverviewActive) return;
+    const tripId = this.tripId();
+    if (!tripId) {
+      this.mapService.resetView();
+      return;
+    }
+    if (tripId !== this.focusedTripId) return;
     let west = Infinity;
     let south = Infinity;
     let east = -Infinity;
@@ -391,7 +493,6 @@ export class MapComponent {
     this.stopData.features.forEach(feature => extend(feature.geometry.coordinates));
     this.routeData.features.forEach(feature => feature.geometry.coordinates.forEach(extend));
     if (!Number.isFinite(west)) {
-      this.mapService.resetView();
       return;
     }
     this.libreMap?.fitBounds([

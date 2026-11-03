@@ -8,11 +8,11 @@ import { APP_URLS } from './config';
 import { MapComponent } from './map/map.component';
 import type { TripPositionUpdate } from './map/trip-position';
 import { resultShapeEdgeIds, type ShapesGraphMappings } from './map/shapes-graph';
-import { FeedMetadataDto } from './gtfs-rt/dto';
+import { BusinessOrganisationDto, FeedMetadataDto } from './gtfs-rt/dto';
 import { StopTimeUpdate, TripUpdate } from './gtfs-rt/models';
 import { GtfsRtStreamService } from './gtfs-rt/services';
 import { extendedRouteTypeLabel } from './gtfs-static/route-types';
-import { CalendarJSON, GtfsDayTripTimelineRow, RouteJSON, StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
+import { AgencyJSON, CalendarJSON, GtfsDayTripTimelineRow, RouteJSON, StopJSON, TripDetailResponseJSON } from './gtfs-static/dto';
 import { GtfsStaticService } from './gtfs-static/gtfs-static.service';
 
 const TIMELINE_CELL_MINUTES = 15;
@@ -136,12 +136,16 @@ export class AppComponent {
   protected readonly staticOnlyTripsByAgency = signal<ReadonlyMap<string, readonly GtfsDayTripTimelineRow[]>>(new Map());
   protected readonly staticOnlyRoutesByRowid = signal<ReadonlyMap<number, RouteJSON>>(new Map());
   protected readonly stopsById = signal<ReadonlyMap<string, StopJSON>>(new Map());
+  private readonly agenciesById = signal<ReadonlyMap<string, AgencyJSON>>(new Map());
+  private readonly organisationsByAgencyId = signal<ReadonlyMap<string, BusinessOrganisationDto>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   private readonly shapesGraphMappings = signal<ShapesGraphMappings | undefined>(undefined);
+  private readonly agencyShapeEdges = signal<ReadonlyMap<string, readonly number[]>>(new Map());
   protected readonly shapesGraphStatus = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly shapesGraphError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
+  protected readonly mapTripFocusRequest = signal(0);
   protected readonly selectedPosition = signal<TripPositionUpdate | undefined>(undefined);
   protected readonly searchTerm = signal(this.initialQuery.get('q') ?? '');
   protected readonly agencyFilter = signal('');
@@ -231,7 +235,9 @@ export class AppComponent {
   protected readonly staticSelectionLabel = computed(() => {
     const agencyId = this.agencyFilter();
     const agencyName = agencyId
-      ? this.timelineItems().find((item) => item.agencyId === agencyId)?.agencyName ?? agencyId
+      ? this.timelineItems().find((item) => item.agencyId === agencyId)?.agencyName
+        ?? this.organisationsByAgencyId().get(agencyId)?.abbreviationDe
+        ?? this.agenciesById().get(agencyId)?.agency_name ?? agencyId
       : 'All agencies';
     return this.activeTripsOnly() ? `${agencyName} · active` : agencyName;
   });
@@ -260,8 +266,19 @@ export class AppComponent {
       const current = options.get(item.agencyId);
       options.set(item.agencyId, {
         id: item.agencyId,
-        name: this.agencyDetailLabel(item),
+        name: this.agencyDetailLabel(item, true),
         count: (current?.count ?? 0) + 1
+      });
+    }
+    const selectedAgency = this.agenciesById().get(this.agencyFilter());
+    if (selectedAgency && !options.has(selectedAgency.agency_id)) {
+      const organisation = this.organisationsByAgencyId().get(selectedAgency.agency_id);
+      options.set(selectedAgency.agency_id, {
+        id: selectedAgency.agency_id,
+        name: organisation
+          ? `${organisation.abbreviationDe} (${selectedAgency.agency_id}) · ${organisation.descriptionDe}`
+          : `${selectedAgency.agency_name} (${selectedAgency.agency_id})`,
+        count: 0
       });
     }
     return [...options.values()].sort((left, right) => {
@@ -329,6 +346,19 @@ export class AppComponent {
   protected readonly filteredShapeEdgeIds = computed(() => resultShapeEdgeIds(
     this.filteredItems().map(item => item.tripId), this.shapesGraphMappings()
   ));
+  protected readonly selectedAgencyEdgeIds = computed<readonly number[] | undefined>(() => {
+    if (this.parseState().status !== 'complete') return [];
+    const agencyId = this.agencyFilter();
+    if (!agencyId || agencyId === '_no_agency') return undefined;
+    return this.agencyShapeEdges().get(agencyId) ?? [];
+  });
+  protected readonly selectedAgencyCode = computed(() => {
+    const agencyId = this.agencyFilter();
+    if (!agencyId || agencyId === '_no_agency') return undefined;
+    return this.organisationsByAgencyId().get(agencyId)?.abbreviationDe.trim()
+      || this.items().find(item => item.agencyId === agencyId)?.dto.businessOrganisation?.abbreviationDe.trim()
+      || agencyId;
+  });
 
   protected readonly selected = computed<TripUpdate | undefined>(() => {
     const items = this.filteredItems();
@@ -562,7 +592,10 @@ export class AppComponent {
     this.staticOnlyTripsByAgency.set(new Map());
     this.staticOnlyRoutesByRowid.set(new Map());
     this.stopsById.set(new Map()); this.stopsLookupError.set(undefined);
+    this.agenciesById.set(new Map());
+    this.organisationsByAgencyId.set(new Map());
     this.shapesGraphMappings.set(undefined);
+    this.agencyShapeEdges.set(new Map());
     this.shapesGraphStatus.set('loading'); this.shapesGraphError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
@@ -573,6 +606,10 @@ export class AppComponent {
     this.parseState.set(emptyParseState('loading'));
     this.feedSubscription = this.stream.streamTripUpdates(this.feedUrl()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (event) => {
+        if (event.type === 'agency-lookup') {
+          this.agenciesById.set(event.agenciesById);
+          this.organisationsByAgencyId.set(event.organisationsByAgencyId);
+        }
         if (event.type === 'metadata') {
           this.metadata.set(event.metadata);
           this.positionTimelineAtNow();
@@ -611,6 +648,7 @@ export class AppComponent {
         if (event.type === 'stops-error') this.stopsLookupError.set(event.message);
         if (event.type === 'shapes-graph') {
           this.shapesGraphMappings.set(event.mappings);
+          this.agencyShapeEdges.set(event.agencyEdgeIds);
           this.shapesGraphStatus.set('ready');
         }
         if (event.type === 'shapes-graph-error') {
@@ -625,6 +663,7 @@ export class AppComponent {
   protected select(item: TripUpdate): void {
     window.clearTimeout(this.filterResetTimer);
     this.selectedId.set(item.id);
+    this.mapTripFocusRequest.update(value => value + 1);
   }
   protected selectView(view: 'timeline' | 'errors'): void {
     window.clearTimeout(this.filterResetTimer);
@@ -705,8 +744,9 @@ export class AppComponent {
     const items = this.items();
     const bySboid = items.find((item) => item.dto.businessOrganisation?.sboid === requested);
     const match = bySboid ?? items.find((item) => item.agencyId === requested);
-    this.applyAgencyFilter(match?.agencyId ?? requested, false);
-    if (!match) this.unmatchedAgency.set(requested);
+    const agencyId = match?.agencyId ?? this.agenciesById().get(requested)?.agency_id;
+    this.applyAgencyFilter(agencyId ?? requested, false);
+    if (!agencyId) this.unmatchedAgency.set(requested);
   }
   protected updateRouteType(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
@@ -783,11 +823,12 @@ export class AppComponent {
     return item.agencyName;
   }
 
-  protected agencyDetailLabel(item: TripUpdate): string {
+  protected agencyDetailLabel(item: TripUpdate, includeId = false): string {
     const organisation = item.dto.businessOrganisation;
+    const id = includeId && item.agencyId !== '_no_agency' ? ` (${item.agencyId})` : '';
     return organisation
-      ? `${organisation.abbreviationDe} · ${organisation.descriptionDe}`
-      : item.agencyName;
+      ? `${organisation.abbreviationDe}${id} · ${organisation.descriptionDe}`
+      : `${item.agencyName}${id}`;
   }
 
   protected routeTypeLabel(routeType: number): string {
