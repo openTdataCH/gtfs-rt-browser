@@ -336,14 +336,14 @@
         <aside class="detail-pane flex-grow-1 bg-white p-4" [class.d-none]="!selected()" aria-label="Selected trip update">
           @if (selected(); as item) {
             <div class="detail-summary">
-            <div class="d-flex align-items-center gap-3 mb-4">
-              <span class="route-badge route-badge-large"
+            <div class="d-flex align-items-start gap-2 mb-3">
+              <span class="route-badge"
                 [class.route-badge-static-only]="item.isStaticOnly"
                 [class.route-badge-scheduled]="item.relationship === 'SCHEDULED'"
                 [class.route-badge-cancelled]="item.relationship === 'CANCELED'"
                 [class.route-badge-added]="item.relationship === 'ADDED'">{{ item.isStaticOnly ? 'GTFS-S only' : item.relationship }}</span>
-              <div>
-                <h2 class="h4 mb-1">Trip <span class="select-whole-id">{{ item.tripId }}</span></h2>
+              <div class="trip-detail-heading">
+                <h2 class="trip-detail-title mb-0">Trip <span class="select-whole-id">{{ item.tripId }}</span></h2>
               </div>
             </div>
             <dl class="detail-grid">

@@ -136,6 +136,8 @@
 }
 .map-pane { flex: 1 1 0; min-width: 0; min-height: 0; border-left: 1px solid #dee2e6; }
 .detail-summary { flex: 0 0 auto; }
+.trip-detail-heading { flex: 1 1 auto; min-width: 0; }
+.trip-detail-title { font-size: 1rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .stop-times-section { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
 .stop-times-scroll {
   flex: 1 1 auto;
@@ -153,7 +155,6 @@
   padding: .2rem .45rem; border-radius: .3rem; color: #fff; background: #5b318d;
   font-size: .76rem; font-weight: 700;
 }
-.route-badge-large { min-width: 3.25rem; min-height: 2.25rem; font-size: .95rem; }
 .route-badge-scheduled { background: #357abd; }
 .route-badge-cancelled { background: #dc3545; }
 .route-badge-added { background: #b86e09; }
