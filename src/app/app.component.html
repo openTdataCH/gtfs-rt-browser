@@ -501,6 +501,7 @@
             [gtfsDay]="metadata()!.feedVersion"
             [agencyCode]="selectedAgencyCode()"
             [agencyId]="agencyFilter()"
+            [tripFocusRequest]="mapTripFocusRequest()"
             (estimatedPositionChange)="selectedPosition.set($event)"
             [resultEdgeIds]="filteredShapeEdgeIds()" [agencyEdgeIds]="selectedAgencyEdgeIds()" [resultShapesStatus]="shapesGraphStatus()"
             [resultShapesError]="shapesGraphError()" />

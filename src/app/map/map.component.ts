@@ -4,6 +4,7 @@ import type { GeoJSONSource, Map as LibreMap, Popup } from 'maplibre-gl';
 import { APP_URLS, withGtfsDay } from '../config';
 import { MapService } from './map.service';
 import type { MapStop } from './map-stop.model';
+import { shapeEdgeBounds } from './shapes-graph';
 import { estimateTripPosition, parseTripPolyline, type TripPositionUpdate } from './trip-position';
 
 @Component({
@@ -99,6 +100,7 @@ export class MapComponent {
   readonly agencyEdgeIds = input<readonly number[] | undefined>(undefined);
   readonly agencyCode = input<string>();
   readonly agencyId = input<string>();
+  readonly tripFocusRequest = input(0);
   readonly resultShapesStatus = input<'loading' | 'ready' | 'error'>('loading');
   readonly resultShapesError = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
@@ -120,10 +122,41 @@ export class MapComponent {
   private loadTimeout?: ReturnType<typeof setTimeout>;
   private appliedResultEdgeIds = new Set<number>();
   private appliedAgencyEdgeIds = new Set<number>();
+  private agencyOverviewActive = false;
+  private cameraAgencyId?: string;
+  private focusedTripId?: string;
+  private lastTripFocusRequest?: number;
+  private cancelAgencyFit?: () => void;
 
   constructor() {
     effect(() => this.updateResultShapeEdges(this.resultEdgeIds()));
     effect(() => this.updateAgencyShapeEdges(this.agencyEdgeIds()));
+    effect(() => {
+      const agencyId = this.agencyId() ?? '';
+      const edgeIds = this.agencyEdgeIds();
+      if (agencyId !== this.cameraAgencyId) {
+        this.cameraAgencyId = agencyId;
+        this.focusedTripId = undefined;
+      }
+      // Late agency data must not override a trip the user already clicked.
+      if (this.focusedTripId !== undefined) return;
+      this.agencyOverviewActive = Boolean(agencyId && agencyId !== '_no_agency');
+      this.fitAgency(edgeIds);
+      if (!this.agencyOverviewActive) this.mapService.resetView();
+    });
+    effect(() => {
+      const request = this.tripFocusRequest();
+      if (this.lastTripFocusRequest === undefined) {
+        this.lastTripFocusRequest = request;
+        return;
+      }
+      if (request === this.lastTripFocusRequest) return;
+      this.lastTripFocusRequest = request;
+      this.focusedTripId = this.tripId();
+      this.agencyOverviewActive = false;
+      this.cancelAgencyFit?.();
+      this.fitStops();
+    });
     effect(onCleanup => {
       const tripId = this.tripId()?.trim();
       const gtfsDay = this.gtfsDay();
@@ -151,6 +184,7 @@ export class MapComponent {
     });
     afterNextRender(() => void this.initialize());
     this.destroyRef.onDestroy(() => {
+      this.cancelAgencyFit?.();
       clearTimeout(this.loadTimeout);
       this.popup?.remove();
       this.libreMap = undefined;
@@ -159,6 +193,7 @@ export class MapComponent {
   }
 
   protected async initialize(): Promise<void> {
+    this.cancelAgencyFit?.();
     clearTimeout(this.loadTimeout);
     this.popup?.remove();
     this.popup = undefined;
@@ -212,6 +247,7 @@ export class MapComponent {
     this.shapesVisible.set(visible);
     if (this.libreMap?.getLayer('shapes-graph')) {
       this.libreMap.setLayoutProperty('shapes-graph', 'visibility', visible ? 'visible' : 'none');
+      if (visible && this.agencyOverviewActive) this.fitAgency(this.agencyEdgeIds());
     }
   }
 
@@ -383,6 +419,7 @@ export class MapComponent {
     map.on('mouseenter', 'trip-stops', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'trip-stops', () => { map.getCanvas().style.cursor = ''; });
     this.fitStops();
+    this.fitAgency(this.agencyEdgeIds());
   }
 
   private async loadTripShape(tripId: string, gtfsDay: string, signal: AbortSignal): Promise<void> {
@@ -436,6 +473,13 @@ export class MapComponent {
   }
 
   private fitStops(): void {
+    if (this.agencyOverviewActive) return;
+    const tripId = this.tripId();
+    if (!tripId) {
+      this.mapService.resetView();
+      return;
+    }
+    if (tripId !== this.focusedTripId) return;
     let west = Infinity;
     let south = Infinity;
     let east = -Infinity;
@@ -449,7 +493,6 @@ export class MapComponent {
     this.stopData.features.forEach(feature => extend(feature.geometry.coordinates));
     this.routeData.features.forEach(feature => feature.geometry.coordinates.forEach(extend));
     if (!Number.isFinite(west)) {
-      this.mapService.resetView();
       return;
     }
     this.libreMap?.fitBounds([

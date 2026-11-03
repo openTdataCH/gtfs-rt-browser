@@ -145,6 +145,7 @@ export class AppComponent {
   protected readonly shapesGraphError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
   protected readonly selectedId = signal<string | undefined>(undefined);
+  protected readonly mapTripFocusRequest = signal(0);
   protected readonly selectedPosition = signal<TripPositionUpdate | undefined>(undefined);
   protected readonly searchTerm = signal(this.initialQuery.get('q') ?? '');
   protected readonly agencyFilter = signal('');
@@ -662,6 +663,7 @@ export class AppComponent {
   protected select(item: TripUpdate): void {
     window.clearTimeout(this.filterResetTimer);
     this.selectedId.set(item.id);
+    this.mapTripFocusRequest.update(value => value + 1);
   }
   protected selectView(view: 'timeline' | 'errors'): void {
     window.clearTimeout(this.filterResetTimer);
