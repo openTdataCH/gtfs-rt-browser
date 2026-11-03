@@ -1,3 +1,5 @@
+import type { Geometry } from 'geojson';
+
 export interface ShapesGraphMappings {
   readonly shapeIdsByTripId: ReadonlyMap<string, number>;
   readonly edgeIdsByShapeId: ReadonlyMap<number, readonly number[]>;
@@ -81,4 +83,30 @@ export function agencyShapeEdgeIds(
     edgesByAgency.set(agencyId, [...edgeIds]);
   }
   return edgesByAgency;
+}
+
+export function shapeEdgeBounds(
+  features: Iterable<{ readonly id?: string | number; readonly geometry: Geometry }>,
+  edgeIds: ReadonlySet<number>
+): [[number, number], [number, number]] | undefined {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  for (const feature of features) {
+    if (feature.id === undefined || !edgeIds.has(Number(feature.id))) continue;
+    const geometry = feature.geometry;
+    const lines = geometry.type === 'LineString' ? [geometry.coordinates]
+      : geometry.type === 'MultiLineString' ? geometry.coordinates : [];
+    for (const line of lines) {
+      for (const [longitude, latitude] of line) {
+        if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) continue;
+        west = Math.min(west, longitude);
+        south = Math.min(south, latitude);
+        east = Math.max(east, longitude);
+        north = Math.max(north, latitude);
+      }
+    }
+  }
+  return Number.isFinite(west) ? [[west, south], [east, north]] : undefined;
 }
