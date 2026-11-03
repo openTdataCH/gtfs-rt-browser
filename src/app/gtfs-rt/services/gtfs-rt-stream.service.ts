@@ -7,7 +7,7 @@ import type { ShapesGraphMappings } from '../../map/shapes-graph';
 
 export type GtfsRtStreamEvent =
   | { type: 'agency-lookup'; agenciesById: ReadonlyMap<string, AgencyJSON>; organisationsByAgencyId: ReadonlyMap<string, BusinessOrganisationDto> }
-  | { type: 'shapes-graph'; mappings: ShapesGraphMappings }
+  | { type: 'shapes-graph'; mappings: ShapesGraphMappings; agencyEdgeIds: ReadonlyMap<string, readonly number[]> }
   | { type: 'shapes-graph-error'; message: string }
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: readonly TripUpdate[]; processed: number }
@@ -21,7 +21,7 @@ export type GtfsRtStreamEvent =
 
 type WorkerResponse =
   | { type: 'agency-lookup'; agenciesById: Map<string, AgencyJSON>; organisationsByAgencyId: Map<string, BusinessOrganisationDto> }
-  | { type: 'shapes-graph'; mappings: ShapesGraphMappings }
+  | { type: 'shapes-graph'; mappings: ShapesGraphMappings; agencyEdgeIds: Map<string, number[]> }
   | { type: 'shapes-graph-error'; message: string }
   | { type: 'metadata'; metadata: FeedMetadataDto }
   | { type: 'trip-updates'; updates: TripUpdateDto[]; processed: number }
