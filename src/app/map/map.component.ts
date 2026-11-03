@@ -96,6 +96,9 @@ export class MapComponent {
   readonly positionMinute = input<number>();
   readonly estimatedPositionChange = output<TripPositionUpdate>();
   readonly resultEdgeIds = input<readonly number[]>([]);
+  readonly agencyEdgeIds = input<readonly number[] | undefined>(undefined);
+  readonly agencyCode = input<string>();
+  readonly agencyId = input<string>();
   readonly resultShapesStatus = input<'loading' | 'ready' | 'error'>('loading');
   readonly resultShapesError = input<string>();
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
@@ -116,9 +119,11 @@ export class MapComponent {
   private readonly shapeCache = new Map<string, Position[]>();
   private loadTimeout?: ReturnType<typeof setTimeout>;
   private appliedResultEdgeIds = new Set<number>();
+  private appliedAgencyEdgeIds = new Set<number>();
 
   constructor() {
     effect(() => this.updateResultShapeEdges(this.resultEdgeIds()));
+    effect(() => this.updateAgencyShapeEdges(this.agencyEdgeIds()));
     effect(onCleanup => {
       const tripId = this.tripId()?.trim();
       const gtfsDay = this.gtfsDay();
@@ -159,6 +164,7 @@ export class MapComponent {
     this.popup = undefined;
     this.libreMap = undefined;
     this.appliedResultEdgeIds.clear();
+    this.appliedAgencyEdgeIds.clear();
     this.state.set('loading');
     this.graphError.set(false);
     this.loadTimeout = setTimeout(() => this.state.set('error'), 20_000);
@@ -221,6 +227,14 @@ export class MapComponent {
     this.appliedResultEdgeIds = this.updateShapeEdges(edgeIds, 'inResults', this.appliedResultEdgeIds);
   }
 
+  private updateAgencyShapeEdges(edgeIds: readonly number[] | undefined): void {
+    this.appliedAgencyEdgeIds = this.updateShapeEdges(edgeIds ?? [], 'inAgency', this.appliedAgencyEdgeIds);
+    if (this.libreMap?.getLayer('shapes-graph')) {
+      this.libreMap.setPaintProperty('shapes-graph', 'line-opacity', edgeIds === undefined ? 0.5
+        : ['case', ['boolean', ['feature-state', 'inAgency'], false], 0.5, 0]);
+    }
+  }
+
   private updateShapeEdges(edgeIds: readonly number[], stateKey: string, previous: Set<number>): Set<number> {
     const map = this.libreMap;
     if (!map?.getSource('shapes-graph')) return previous;
@@ -278,6 +292,7 @@ export class MapComponent {
           : ['case', ['boolean', ['feature-state', 'inAgency'], false], 0.5, 0]
       }
     });
+    this.updateAgencyShapeEdges(this.agencyEdgeIds());
     map.addLayer({
       id: 'result-shapes', type: 'line', source: 'shapes-graph', 'source-layer': 'trgraph',
       layout: {
