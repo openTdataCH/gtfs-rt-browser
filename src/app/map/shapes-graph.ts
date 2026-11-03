@@ -53,3 +53,32 @@ export function resultShapeEdgeIds(tripIds: Iterable<string>, mappings?: ShapesG
   }
   return [...edgeIds];
 }
+
+export function agencyShapeEdgeIds(
+  trips: Iterable<{ readonly trip_id: string; readonly route_rowid: number }>,
+  routes: Iterable<{ readonly rowid: number; readonly agency_id: string }>,
+  mappings: ShapesGraphMappings
+): ReadonlyMap<string, readonly number[]> {
+  const agencyByRoute = new Map([...routes].map(route => [route.rowid, route.agency_id]));
+  const shapeIdsByAgency = new Map<string, Set<number>>();
+  for (const trip of trips) {
+    const agencyId = agencyByRoute.get(trip.route_rowid);
+    if (agencyId === undefined) continue;
+    let shapeIds = shapeIdsByAgency.get(agencyId);
+    if (!shapeIds) {
+      shapeIds = new Set();
+      shapeIdsByAgency.set(agencyId, shapeIds);
+    }
+    const shapeId = mappings.shapeIdsByTripId.get(trip.trip_id);
+    if (shapeId !== undefined) shapeIds.add(shapeId);
+  }
+  const edgesByAgency = new Map<string, readonly number[]>();
+  for (const [agencyId, shapeIds] of shapeIdsByAgency) {
+    const edgeIds = new Set<number>();
+    for (const shapeId of shapeIds) {
+      for (const edgeId of mappings.edgeIdsByShapeId.get(shapeId) ?? []) edgeIds.add(edgeId);
+    }
+    edgesByAgency.set(agencyId, [...edgeIds]);
+  }
+  return edgesByAgency;
+}
