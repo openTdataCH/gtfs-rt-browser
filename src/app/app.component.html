@@ -499,8 +499,10 @@
         <aside class="map-pane" aria-label="Trip map">
           <app-map [stops]="stopTableRows()" [tripId]="selected()?.tripId" [positionMinute]="selectedPositionMinute()"
             [gtfsDay]="metadata()!.feedVersion"
+            [agencyCode]="selectedAgencyCode()"
+            [agencyId]="agencyFilter()"
             (estimatedPositionChange)="selectedPosition.set($event)"
-            [resultEdgeIds]="filteredShapeEdgeIds()" [resultShapesStatus]="shapesGraphStatus()"
+            [resultEdgeIds]="filteredShapeEdgeIds()" [agencyEdgeIds]="selectedAgencyEdgeIds()" [resultShapesStatus]="shapesGraphStatus()"
             [resultShapesError]="shapesGraphError()" />
         </aside>
       </div>
