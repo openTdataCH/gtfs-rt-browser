@@ -223,6 +223,29 @@ export class MapComponent {
     }
   }
 
+  private fitAgency(edgeIds: readonly number[] | undefined): void {
+    this.cancelAgencyFit?.();
+    this.cancelAgencyFit = undefined;
+    const map = this.libreMap;
+    if (!map || !this.agencyOverviewActive || !map.getSource('shapes-graph')) return;
+    if (!edgeIds?.length) {
+      this.mapService.resetView();
+      return;
+    }
+    const ids = new Set(edgeIds);
+    const fit = () => {
+      this.cancelAgencyFit = undefined;
+      if (this.libreMap !== map || !this.agencyOverviewActive) return;
+      const bounds = shapeEdgeBounds(map.querySourceFeatures('shapes-graph', { sourceLayer: 'trgraph' }), ids);
+      if (bounds) map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
+    };
+    // Load the national extent first; querying tiles in a previous trip's viewport
+    // would measure only a clipped part of the next agency's network.
+    map.once('idle', fit);
+    this.cancelAgencyFit = () => map.off('idle', fit);
+    this.mapService.resetView();
+  }
+
   private updateResultShapeEdges(edgeIds: readonly number[]): void {
     this.appliedResultEdgeIds = this.updateShapeEdges(edgeIds, 'inResults', this.appliedResultEdgeIds);
   }
