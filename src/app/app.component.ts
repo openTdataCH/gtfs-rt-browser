@@ -140,6 +140,7 @@ export class AppComponent {
   private readonly organisationsByAgencyId = signal<ReadonlyMap<string, BusinessOrganisationDto>>(new Map());
   protected readonly stopsLookupError = signal<string | undefined>(undefined);
   private readonly shapesGraphMappings = signal<ShapesGraphMappings | undefined>(undefined);
+  private readonly agencyShapeEdges = signal<ReadonlyMap<string, readonly number[]>>(new Map());
   protected readonly shapesGraphStatus = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly shapesGraphError = signal<string | undefined>(undefined);
   protected readonly staticTripState = signal<StaticTripState>({ status: 'idle' });
@@ -344,6 +345,19 @@ export class AppComponent {
   protected readonly filteredShapeEdgeIds = computed(() => resultShapeEdgeIds(
     this.filteredItems().map(item => item.tripId), this.shapesGraphMappings()
   ));
+  protected readonly selectedAgencyEdgeIds = computed<readonly number[] | undefined>(() => {
+    if (this.parseState().status !== 'complete') return [];
+    const agencyId = this.agencyFilter();
+    if (!agencyId || agencyId === '_no_agency') return undefined;
+    return this.agencyShapeEdges().get(agencyId) ?? [];
+  });
+  protected readonly selectedAgencyCode = computed(() => {
+    const agencyId = this.agencyFilter();
+    if (!agencyId || agencyId === '_no_agency') return undefined;
+    return this.organisationsByAgencyId().get(agencyId)?.abbreviationDe.trim()
+      || this.items().find(item => item.agencyId === agencyId)?.dto.businessOrganisation?.abbreviationDe.trim()
+      || agencyId;
+  });
 
   protected readonly selected = computed<TripUpdate | undefined>(() => {
     const items = this.filteredItems();
@@ -580,6 +594,7 @@ export class AppComponent {
     this.agenciesById.set(new Map());
     this.organisationsByAgencyId.set(new Map());
     this.shapesGraphMappings.set(undefined);
+    this.agencyShapeEdges.set(new Map());
     this.shapesGraphStatus.set('loading'); this.shapesGraphError.set(undefined);
     this.staticTripState.set({ status: 'idle' });
     if (this.feedSource.error) {
@@ -632,6 +647,7 @@ export class AppComponent {
         if (event.type === 'stops-error') this.stopsLookupError.set(event.message);
         if (event.type === 'shapes-graph') {
           this.shapesGraphMappings.set(event.mappings);
+          this.agencyShapeEdges.set(event.agencyEdgeIds);
           this.shapesGraphStatus.set('ready');
         }
         if (event.type === 'shapes-graph-error') {
