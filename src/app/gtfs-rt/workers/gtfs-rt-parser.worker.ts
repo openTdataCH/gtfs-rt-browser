@@ -2,7 +2,7 @@
 
 import GtfsRealtimeBindings, { transit_realtime } from 'gtfs-realtime-bindings';
 import { APP_URLS, withGtfsDay } from '../../config';
-import { parseShapesGraphMappings } from '../../map/shapes-graph';
+import { agencyShapeEdgeIds, parseShapesGraphMappings } from '../../map/shapes-graph';
 import {
   BusinessOrganisationDto, FeedMetadataDto, GoRealtimeDto, StopScheduleRelationship, StopTimeEventDto,
   StopTimeUpdateDto, TripScheduleRelationship, TripTimelineUpdateDto, TripUpdateDto
@@ -90,10 +90,15 @@ async function parseFeed(url: string): Promise<void> {
       .then((timelines) => ({ timelines }))
       .catch((error: unknown) => ({ error }));
 
+    const staticLookupsPromise = Promise.all([
+      fetchGtfsLookup(APP_URLS.gtfsAgencyLookup, gtfsDay, 'agency'),
+      fetchGtfsLookup(APP_URLS.gtfsRoutesLookup, gtfsDay, 'routes')
+    ]);
     const shapesGraphPromise = Promise.all([
       fetchShapesGraphMapping(withGtfsDay(APP_URLS.tripShapeEdgeMaps, gtfsDay)),
-      tripTimelinesPromise
-    ]).then(([mappingData, timelineResult]) => {
+      tripTimelinesPromise,
+      staticLookupsPromise
+    ]).then(([mappingData, timelineResult, [, routesLookup]]) => {
       const tripIds = new Set(tripEntities.flatMap(entity =>
         entity.tripUpdate?.trip.tripId ? [entity.tripUpdate.trip.tripId] : []));
       if ('timelines' in timelineResult) {
@@ -102,16 +107,16 @@ async function parseFeed(url: string): Promise<void> {
         }
       }
       const mappings = parseShapesGraphMappings(mappingData, tripIds);
-      postMessage({ type: 'shapes-graph', mappings });
+      const dayTrips = 'timelines' in timelineResult
+        ? timelineResult.timelines.find(({ day }) => day === feedDay)?.timelines.rows ?? [] : [];
+      const agencyEdgeIds = agencyShapeEdgeIds(dayTrips, routesLookup.rows, mappings);
+      postMessage({ type: 'shapes-graph', mappings, agencyEdgeIds });
     }).catch((error: unknown) => postMessage({
       type: 'shapes-graph-error',
       message: error instanceof Error ? error.message : 'Unable to load shapes graph mappings.'
     }));
 
-    const [agencyLookup, routesLookup] = await Promise.all([
-      fetchGtfsLookup(APP_URLS.gtfsAgencyLookup, gtfsDay, 'agency'),
-      fetchGtfsLookup(APP_URLS.gtfsRoutesLookup, gtfsDay, 'routes')
-    ]);
+    const [agencyLookup, routesLookup] = await staticLookupsPromise;
     console.info('GTFS static lookups parsed.', {
       gtfsDay,
       agencies: agencyLookup.rows.length,
