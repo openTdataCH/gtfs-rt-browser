@@ -345,6 +345,8 @@
               <div class="trip-detail-heading">
                 <h2 class="trip-detail-title mb-0">Trip <span class="select-whole-id">{{ item.tripId }}</span></h2>
               </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm ms-auto flex-shrink-0 text-nowrap"
+                (click)="select(item)" title="Fit the selected trip on the map with padding">Zoom to trip</button>
             </div>
             <dl class="detail-grid">
               @if (item.isStaticOnly) {
