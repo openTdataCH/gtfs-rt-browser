@@ -11,8 +11,8 @@ export const APP_URLS = {
   gtfsChRoutes: 'https://gtfs.ch/routes',
   gtfsChTrips: 'https://api.gtfs.ch/v1/trips',
 
-  shapesGraph: 'https://api.gtfs.ch/shapes-graph/trgraph.pmtiles',
-  tripShapeEdgeMaps: 'https://api.gtfs.ch/shapes-graph/trip-shape-edge-maps.json',
+  shapesGraph: 'https://api.gtfs.ch/v1/shapes-data/versions/{gtfs_day}/shapes-data/trgraph.pmtiles',
+  tripShapeEdgeMaps: 'https://api.gtfs.ch/v1/shapes-data/versions/{gtfs_day}/shapes-data/trip-shape-edge-maps.json',
 
   atlasBusinessOrganisations:
     'https://atlas.app.sbb.ch/business-organisation-directory/business-organisations',
@@ -22,6 +22,10 @@ export const APP_URLS = {
 } as const;
 
 export function withGtfsDay(resourceUrl: string, gtfsDay: string): string {
+  if (resourceUrl.includes('{gtfs_day}')) {
+    return resourceUrl.replaceAll('{gtfs_day}', encodeURIComponent(gtfsDay));
+  }
+
   const url = new URL(resourceUrl);
   url.searchParams.set('gtfs_day', gtfsDay);
   return url.toString();
