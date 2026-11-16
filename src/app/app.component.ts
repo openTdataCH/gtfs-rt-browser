@@ -169,7 +169,6 @@ export class AppComponent {
     if (!staticTrips?.length) return realtime;
     const routes = this.staticOnlyRoutesByRowid();
     const example = realtime.find((item) => item.agencyId === agencyId);
-    if (!example) return realtime;
     const feedDay = this.metadata()?.feedDay;
     if (!feedDay) return realtime;
     const staticOnly = staticTrips.flatMap((trip) => {
@@ -182,10 +181,10 @@ export class AppComponent {
           startDate: feedDay.replaceAll('-', ''), scheduleRelationship: 'SCHEDULED' },
         stopTimeUpdates: [],
         agencyId,
-        agency: example.dto.agency,
-        businessOrganisation: example.dto.businessOrganisation,
+        agency: this.agenciesById().get(agencyId) ?? example?.dto.agency,
+        businessOrganisation: this.organisationsByAgencyId().get(agencyId) ?? example?.dto.businessOrganisation,
         route,
-        goRealtimeStatus: example.dto.goRealtimeStatus,
+        goRealtimeStatus: example?.dto.goRealtimeStatus ?? 'unknown',
         staticTripAvailable: true,
         timeline: { departureDayMinutes: trip.departure_day_minutes,
           arrivalDayMinutes: trip.arrival_day_minutes }
