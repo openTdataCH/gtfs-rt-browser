@@ -153,8 +153,8 @@ export class AppComponent {
   protected readonly agencySort = signal<'name' | 'count'>('count');
   protected readonly routeTypeFilter = signal(routeTypeFromQuery(this.initialQuery.get('route_type')));
   protected readonly relationshipFilter = signal(statusFromQuery(this.initialQuery.get('status')));
-  protected readonly activeTripsOnly = signal(activeFromQuery(this.initialQuery.get('active')));
-  protected readonly showStaticOnlyTrips = signal(false);
+  protected readonly activeTripsOnly = signal(booleanFromQuery(this.initialQuery.get('active')));
+  protected readonly showStaticOnlyTrips = signal(booleanFromQuery(this.initialQuery.get('show_static')));
   protected readonly groupByRouteShortName = signal(false);
   protected readonly expandedRouteShortNames = signal<ReadonlySet<string>>(new Set());
   protected readonly filtersExpanded = signal(false);
@@ -169,7 +169,6 @@ export class AppComponent {
     if (!staticTrips?.length) return realtime;
     const routes = this.staticOnlyRoutesByRowid();
     const example = realtime.find((item) => item.agencyId === agencyId);
-    if (!example) return realtime;
     const feedDay = this.metadata()?.feedDay;
     if (!feedDay) return realtime;
     const staticOnly = staticTrips.flatMap((trip) => {
@@ -182,10 +181,10 @@ export class AppComponent {
           startDate: feedDay.replaceAll('-', ''), scheduleRelationship: 'SCHEDULED' },
         stopTimeUpdates: [],
         agencyId,
-        agency: example.dto.agency,
-        businessOrganisation: example.dto.businessOrganisation,
+        agency: this.agenciesById().get(agencyId) ?? example?.dto.agency,
+        businessOrganisation: this.organisationsByAgencyId().get(agencyId) ?? example?.dto.businessOrganisation,
         route,
-        goRealtimeStatus: example.dto.goRealtimeStatus,
+        goRealtimeStatus: example?.dto.goRealtimeStatus ?? 'unknown',
         staticTripAvailable: true,
         timeline: { departureDayMinutes: trip.departure_day_minutes,
           arrivalDayMinutes: trip.arrival_day_minutes }
@@ -671,6 +670,7 @@ export class AppComponent {
     this.agencyFilter.set('');
     this.unmatchedAgency.set(undefined);
     this.showStaticOnlyTrips.set(false);
+    this.setQueryParam('show_static', '');
     this.setQueryParam('agency', '');
     this.routeTypeFilter.set('');
     this.setQueryParam('route_type', '');
@@ -730,7 +730,10 @@ export class AppComponent {
   protected applyAgencyFilter(agency: string, updateUrl = true): void {
     this.agencyFilter.set(agency);
     this.unmatchedAgency.set(undefined);
-    if (!agency) this.showStaticOnlyTrips.set(false);
+    if (!agency) {
+      this.showStaticOnlyTrips.set(false);
+      this.setQueryParam('show_static', '');
+    }
     this.pendingAgency = undefined;
     if (updateUrl) this.setQueryParam('agency', agency);
     this.groupByRouteShortName.set(false);
@@ -773,7 +776,9 @@ export class AppComponent {
     window.history.replaceState(window.history.state, '', url);
   }
   protected updateShowStaticOnlyTrips(event: Event): void {
-    this.showStaticOnlyTrips.set((event.target as HTMLInputElement).checked && this.canShowStaticOnlyTrips());
+    const checked = (event.target as HTMLInputElement).checked && this.canShowStaticOnlyTrips();
+    this.showStaticOnlyTrips.set(checked);
+    this.setQueryParam('show_static', checked ? 'yes' : '');
     this.resetListAfterFilterChange();
   }
   protected updateGroupByRouteShortName(event: Event): void {
@@ -1188,7 +1193,7 @@ declare global {
   }
 }
 
-function activeFromQuery(value: string | null): boolean {
+function booleanFromQuery(value: string | null): boolean {
   return value !== null && ['yes', '1', 'true'].includes(value.trim().toLowerCase());
 }
 

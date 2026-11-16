@@ -19,6 +19,7 @@ npm start
 | `agency` | Select an agency after the feed loads. Accepts either a business-organisation SBOID (for example, `ch:1:sboid:100001`) from the realtime feed or a GTFS-static `agency_id`. Exact matches are checked in that order. The GTFS agency lookup supplies the name for a selected agency with no matching realtime trips, shown with a zero count. An unknown agency shows no results, hides trip details, and leaves the map at its default Switzerland view. Changing the agency dropdown writes the GTFS `agency_id` to the URL. |
 | `q` | Search the loaded messages by trip, route, vehicle, agency, SBOID, or stop ID. This does not select the agency dropdown. Editing the search box updates this parameter. |
 | `active` | Enable **Active trips** at startup with `yes`, `1`, or `true` (case-insensitive). The checkbox writes `active=yes` when enabled and removes the parameter when disabled. |
+| `show_static` | Enable **Show all GTFS-S trips** at startup with `yes`, `1`, or `true` (case-insensitive); requires an `agency` selection. The checkbox writes `show_static=yes` when enabled and removes it when disabled. Clearing the agency or switching views also removes it. Example: `?agency=146&show_static=yes`. |
 | `route_type` | Filter by a numeric GTFS route type, such as `101`. The parameter is absent for **All route types** and **missing route type**. |
 | `status` | Filter by GTFS-RT trip schedule relationship, such as `SCHEDULED`, `ADDED`, or `CANCELED`. The dropdown updates this parameter and removes it for **All relationships**. |
 
